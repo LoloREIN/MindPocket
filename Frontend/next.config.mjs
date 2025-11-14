@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  trailingSlash: true,
+  // Removed output: 'export' - let Amplify handle Next.js naturally
   typescript: {
     ignoreBuildErrors: true,
   },
