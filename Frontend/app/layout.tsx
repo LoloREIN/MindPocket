@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { BottomNav } from '@/components/bottom-nav'
+import { AuthWrapper } from '@/components/auth/auth-wrapper'
+import '@/lib/auth-config'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -38,11 +39,12 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body className={`font-sans antialiased`}>
-        <div className="pb-16">
-          {children}
-        </div>
-        <BottomNav />
-        <Analytics />
+        <AuthWrapper>
+          <div className="pb-16">
+            {children}
+          </div>
+          <BottomNav />
+        </AuthWrapper>
       </body>
     </html>
   )
