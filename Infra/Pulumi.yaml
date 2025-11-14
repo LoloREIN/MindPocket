@@ -76,13 +76,17 @@ resources:
           phases:
             preBuild:
               commands:
-                - echo "Monorepo structure - navigating to Frontend folder"
-                - cd Frontend
-                - echo "Installing dependencies with npm"
-                - npm ci
+                - echo "=== PREBUILD PHASE ==="
+                - echo "Current working directory:" && pwd
+                - echo "Repository contents:" && ls -la
+                - echo "Installing dependencies in Frontend folder"
+                - cd Frontend && if [ -f package-lock.json ]; then npm ci; else npm install --legacy-peer-deps --include=dev; fi
             build:
               commands:
-                - echo "Building Next.js application"
+                - echo "=== BUILD PHASE ==="
+                - echo "Current working directory:" && pwd  
+                - echo "Directory contents:" && ls -la
+                - echo "Building Next.js application (already in Frontend folder)"
                 - npm run build
           artifacts:
             baseDirectory: Frontend
