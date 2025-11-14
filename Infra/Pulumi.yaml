@@ -7,22 +7,17 @@ resources:
     type: aws:cognito:UserPool
     properties:
       name: mindpocket-users
-      aliasAttributes:
-        - email
-        - preferred_username
       usernameAttributes:
         - email
       autoVerifiedAttributes:
         - email
-      emailVerificationMessage: "Tu código de verificación para MindPocket es {####}"
-      emailVerificationSubject: "Verifica tu cuenta de MindPocket"
       passwordPolicy:
         minimumLength: 8
         requireLowercase: true
         requireNumbers: true
         requireSymbols: false
         requireUppercase: true
-      schema:
+      schemas:
         - attributeDataType: String
           name: email
           required: true
@@ -55,10 +50,10 @@ resources:
         - COGNITO
       callbackUrls:
         - http://localhost:3000/auth/callback
-        - https://main.${mindpocket-app.id}.amplifyapp.com/auth/callback
+        - https://mindpocket.app/auth/callback
       logoutUrls:
         - http://localhost:3000/
-        - https://main.${mindpocket-app.id}.amplifyapp.com/
+        - https://mindpocket.app/
       allowedOauthFlows:
         - code
       allowedOauthScopes:
@@ -73,7 +68,8 @@ resources:
     properties:
       name: mindpocket
       description: MindPocket wellness app
-      repository: https://github.com/your-username/MindPocket
+      repository: https://github.com/LoloREIN/MindPocket
+      accessToken: ${amplify:accessToken}
       buildSpec: |
         version: 1
         frontend:
@@ -101,6 +97,8 @@ resources:
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
         NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID: ${mindpocket-user-pool-client.id}
         NEXT_PUBLIC_COGNITO_REGION: ${aws:region}
+        NEXT_PUBLIC_API_URL: ${mindpocket-api.apiEndpoint}
+        NEXT_PUBLIC_API_REGION: ${aws:region}
 
   # Main branch
   main-branch:
@@ -111,15 +109,15 @@ resources:
       enableAutoBuild: true
       framework: Next.js - SSG
 
-  # Domain association (optional)
-  domain:
-    type: aws:amplify:DomainAssociation
-    properties:
-      appId: ${mindpocket-app.id}
-      domainName: mindpocket.app
-      subDomains:
-        - branchName: ${main-branch.branchName}
-          prefix: ""
+  # Domain association (optional - commented out for now)
+  # domain:
+  #   type: aws:amplify:DomainAssociation
+  #   properties:
+  #     appId: ${mindpocket-app.id}
+  #     domainName: mindpocket.app
+  #     subDomains:
+  #       - branchName: ${main-branch.branchName}
+  #         prefix: ""
 
   # DynamoDB Table for WellnessItems
   wellness-items-table:
@@ -142,7 +140,7 @@ resources:
   raw-media-bucket:
     type: aws:s3:Bucket
     properties:
-      bucket: mindpocket-raw-media-${aws:accountId}-${aws:region}
+      bucket: mindpocket-raw-media-${pulumi.stack}-${aws:region}
       tags:
         Environment: dev
         Project: mindpocket
@@ -151,7 +149,7 @@ resources:
   transcripts-bucket:
     type: aws:s3:Bucket
     properties:
-      bucket: mindpocket-transcripts-${aws:accountId}-${aws:region}
+      bucket: mindpocket-transcripts-${pulumi.stack}-${aws:region}
       tags:
         Environment: dev
         Project: mindpocket
@@ -521,13 +519,12 @@ resources:
   ingest-link-lambda:
     type: aws:lambda:Function
     properties:
-      functionName: mindpocket-ingest-link
+      name: mindpocket-ingest-link
       runtime: nodejs20.x
       handler: index.handler
       role: ${ingest-link-lambda-role.arn}
       code:
-        archiveType: zip
-        path: ./lambdas/ingest-link
+        fn::fileArchive: ./lambdas/ingest-link
       timeout: 30
       environment:
         variables:
@@ -537,13 +534,12 @@ resources:
   process-tiktok-lambda:
     type: aws:lambda:Function
     properties:
-      functionName: mindpocket-process-tiktok
+      name: mindpocket-process-tiktok
       runtime: nodejs20.x
       handler: index.handler
       role: ${process-tiktok-lambda-role.arn}
       code:
-        archiveType: zip
-        path: ./lambdas/process-tiktok
+        fn::fileArchive: ./lambdas/process-tiktok
       timeout: 60
       environment:
         variables:
@@ -554,13 +550,12 @@ resources:
   transcribe-callback-lambda:
     type: aws:lambda:Function
     properties:
-      functionName: mindpocket-transcribe-callback
+      name: mindpocket-transcribe-callback
       runtime: nodejs20.x
       handler: index.handler
       role: ${transcribe-callback-lambda-role.arn}
       code:
-        archiveType: zip
-        path: ./lambdas/transcribe-callback
+        fn::fileArchive: ./lambdas/transcribe-callback
       timeout: 120
       environment:
         variables:
@@ -571,13 +566,12 @@ resources:
   get-items-lambda:
     type: aws:lambda:Function
     properties:
-      functionName: mindpocket-get-items
+      name: mindpocket-get-items
       runtime: nodejs20.x
       handler: index.handler
       role: ${get-items-lambda-role.arn}
       code:
-        archiveType: zip
-        path: ./lambdas/get-items
+        fn::fileArchive: ./lambdas/get-items
       timeout: 30
       environment:
         variables:
@@ -586,13 +580,12 @@ resources:
   get-item-lambda:
     type: aws:lambda:Function
     properties:
-      functionName: mindpocket-get-item
+      name: mindpocket-get-item
       runtime: nodejs20.x
       handler: index.handler
       role: ${get-item-lambda-role.arn}
       code:
-        archiveType: zip
-        path: ./lambdas/get-item
+        fn::fileArchive: ./lambdas/get-item
       timeout: 30
       environment:
         variables:
