@@ -1,0 +1,697 @@
+name: mindPocket
+description: hacktahon de wellness
+runtime: yaml
+resources:
+  # Cognito User Pool
+  mindpocket-user-pool:
+    type: aws:cognito:UserPool
+    properties:
+      name: mindpocket-users
+      aliasAttributes:
+        - email
+        - preferred_username
+      usernameAttributes:
+        - email
+      autoVerifiedAttributes:
+        - email
+      emailVerificationMessage: "Tu código de verificación para MindPocket es {####}"
+      emailVerificationSubject: "Verifica tu cuenta de MindPocket"
+      passwordPolicy:
+        minimumLength: 8
+        requireLowercase: true
+        requireNumbers: true
+        requireSymbols: false
+        requireUppercase: true
+      schema:
+        - attributeDataType: String
+          name: email
+          required: true
+          mutable: true
+        - attributeDataType: String
+          name: name
+          required: true
+          mutable: true
+        - attributeDataType: String
+          name: phone_number
+          required: true
+          mutable: true
+      verificationMessageTemplate:
+        defaultEmailOption: CONFIRM_WITH_CODE
+        emailMessage: "Tu código de verificación para MindPocket es {####}"
+        emailSubject: "Verifica tu cuenta de MindPocket"
+
+  # Cognito User Pool Client
+  mindpocket-user-pool-client:
+    type: aws:cognito:UserPoolClient
+    properties:
+      name: mindpocket-web-client
+      userPoolId: ${mindpocket-user-pool.id}
+      generateSecret: false
+      explicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      supportedIdentityProviders:
+        - COGNITO
+      callbackUrls:
+        - http://localhost:3000/auth/callback
+        - https://main.${mindpocket-app.id}.amplifyapp.com/auth/callback
+      logoutUrls:
+        - http://localhost:3000/
+        - https://main.${mindpocket-app.id}.amplifyapp.com/
+      allowedOauthFlows:
+        - code
+      allowedOauthScopes:
+        - email
+        - openid
+        - profile
+      allowedOauthFlowsUserPoolClient: true
+
+  # Amplify App
+  mindpocket-app:
+    type: aws:amplify:App
+    properties:
+      name: mindpocket
+      description: MindPocket wellness app
+      repository: https://github.com/your-username/MindPocket
+      buildSpec: |
+        version: 1
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - cd Frontend
+                - pnpm install
+            build:
+              commands:
+                - pnpm run build
+          artifacts:
+            baseDirectory: Frontend/.next
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - Frontend/node_modules/**/*
+      customRules:
+        - source: /<*>
+          status: "404-200"
+          target: /index.html
+      environmentVariables:
+        NODE_ENV: production
+        NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
+        NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID: ${mindpocket-user-pool-client.id}
+        NEXT_PUBLIC_COGNITO_REGION: ${aws:region}
+
+  # Main branch
+  main-branch:
+    type: aws:amplify:Branch
+    properties:
+      appId: ${mindpocket-app.id}
+      branchName: main
+      enableAutoBuild: true
+      framework: Next.js - SSG
+
+  # Domain association (optional)
+  domain:
+    type: aws:amplify:DomainAssociation
+    properties:
+      appId: ${mindpocket-app.id}
+      domainName: mindpocket.app
+      subDomains:
+        - branchName: ${main-branch.branchName}
+          prefix: ""
+
+  # DynamoDB Table for WellnessItems
+  wellness-items-table:
+    type: aws:dynamodb:Table
+    properties:
+      name: WellnessItems
+      billingMode: PAY_PER_REQUEST
+      hashKey: userId
+      rangeKey: itemId
+      attributes:
+        - name: userId
+          type: S
+        - name: itemId
+          type: S
+      tags:
+        Environment: dev
+        Project: mindpocket
+
+  # S3 Bucket for Raw Media
+  raw-media-bucket:
+    type: aws:s3:Bucket
+    properties:
+      bucket: mindpocket-raw-media-${aws:accountId}-${aws:region}
+      tags:
+        Environment: dev
+        Project: mindpocket
+
+  # S3 Bucket for Transcripts
+  transcripts-bucket:
+    type: aws:s3:Bucket
+    properties:
+      bucket: mindpocket-transcripts-${aws:accountId}-${aws:region}
+      tags:
+        Environment: dev
+        Project: mindpocket
+
+  # S3 Bucket Public Access Block for Raw Media
+  raw-media-bucket-pab:
+    type: aws:s3:BucketPublicAccessBlock
+    properties:
+      bucket: ${raw-media-bucket.id}
+      blockPublicAcls: true
+      blockPublicPolicy: true
+      ignorePublicAcls: true
+      restrictPublicBuckets: true
+
+  # S3 Bucket Public Access Block for Transcripts
+  transcripts-bucket-pab:
+    type: aws:s3:BucketPublicAccessBlock
+    properties:
+      bucket: ${transcripts-bucket.id}
+      blockPublicAcls: true
+      blockPublicPolicy: true
+      ignorePublicAcls: true
+      restrictPublicBuckets: true
+
+  # S3 Bucket Server Side Encryption for Raw Media
+  raw-media-bucket-sse:
+    type: aws:s3:BucketServerSideEncryptionConfiguration
+    properties:
+      bucket: ${raw-media-bucket.id}
+      rules:
+        - applyServerSideEncryptionByDefault:
+            sseAlgorithm: AES256
+
+  # S3 Bucket Server Side Encryption for Transcripts
+  transcripts-bucket-sse:
+    type: aws:s3:BucketServerSideEncryptionConfiguration
+    properties:
+      bucket: ${transcripts-bucket.id}
+      rules:
+        - applyServerSideEncryptionByDefault:
+            sseAlgorithm: AES256
+
+  # SQS Dead Letter Queue
+  process-tiktok-dlq:
+    type: aws:sqs:Queue
+    properties:
+      name: mindpocket-process-tiktok-dlq
+      messageRetentionSeconds: 1209600  # 14 days
+      tags:
+        Environment: dev
+        Project: mindpocket
+
+  # SQS Main Processing Queue
+  process-tiktok-queue:
+    type: aws:sqs:Queue
+    properties:
+      name: mindpocket-process-tiktok-queue
+      visibilityTimeoutSeconds: 300  # 5 minutes
+      messageRetentionSeconds: 1209600  # 14 days
+      redrivePolicy: |
+        {
+          "deadLetterTargetArn": "${process-tiktok-dlq.arn}",
+          "maxReceiveCount": 3
+        }
+      tags:
+        Environment: dev
+        Project: mindpocket
+
+  # IAM Role for IngestLink Lambda
+  ingest-link-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Effect": "Allow"
+            }
+          ]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for IngestLink Lambda
+  ingest-link-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${ingest-link-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:GetItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": "${process-tiktok-queue.arn}"
+            }
+          ]
+        }
+
+  # IAM Role for ProcessTikTok Lambda
+  process-tiktok-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Effect": "Allow"
+            }
+          ]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for ProcessTikTok Lambda
+  process-tiktok-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${process-tiktok-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": "${process-tiktok-queue.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            }
+          ]
+        }
+
+  # IAM Role for TranscribeCallback Lambda
+  transcribe-callback-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Effect": "Allow"
+            }
+          ]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for TranscribeCallback Lambda
+  transcribe-callback-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${transcribe-callback-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Resource": "${transcripts-bucket.arn}/*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            }
+          ]
+        }
+
+  # IAM Role for GetItems Lambda
+  get-items-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Effect": "Allow"
+            }
+          ]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for GetItems Lambda
+  get-items-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${get-items-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:Query"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            }
+          ]
+        }
+
+  # IAM Role for GetItem Lambda
+  get-item-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Effect": "Allow"
+            }
+          ]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for GetItem Lambda
+  get-item-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${get-item-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            }
+          ]
+        }
+
+  # Lambda Functions
+  ingest-link-lambda:
+    type: aws:lambda:Function
+    properties:
+      functionName: mindpocket-ingest-link
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${ingest-link-lambda-role.arn}
+      code:
+        archiveType: zip
+        path: ./lambdas/ingest-link
+      timeout: 30
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          PROCESS_TIKTOK_QUEUE_URL: ${process-tiktok-queue.url}
+
+  process-tiktok-lambda:
+    type: aws:lambda:Function
+    properties:
+      functionName: mindpocket-process-tiktok
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${process-tiktok-lambda-role.arn}
+      code:
+        archiveType: zip
+        path: ./lambdas/process-tiktok
+      timeout: 300
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+
+  transcribe-callback-lambda:
+    type: aws:lambda:Function
+    properties:
+      functionName: mindpocket-transcribe-callback
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${transcribe-callback-lambda-role.arn}
+      code:
+        archiveType: zip
+        path: ./lambdas/transcribe-callback
+      timeout: 60
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+
+  get-items-lambda:
+    type: aws:lambda:Function
+    properties:
+      functionName: mindpocket-get-items
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${get-items-lambda-role.arn}
+      code:
+        archiveType: zip
+        path: ./lambdas/get-items
+      timeout: 30
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+
+  get-item-lambda:
+    type: aws:lambda:Function
+    properties:
+      functionName: mindpocket-get-item
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${get-item-lambda-role.arn}
+      code:
+        archiveType: zip
+        path: ./lambdas/get-item
+      timeout: 30
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+
+  # SQS Event Source Mapping for ProcessTikTok Lambda
+  process-tiktok-event-source:
+    type: aws:lambda:EventSourceMapping
+    properties:
+      eventSourceArn: ${process-tiktok-queue.arn}
+      functionName: ${process-tiktok-lambda.arn}
+      batchSize: 10
+      maximumBatchingWindowInSeconds: 5
+
+  # S3 Bucket Notification for TranscribeCallback Lambda
+  transcripts-bucket-notification:
+    type: aws:s3:BucketNotification
+    properties:
+      bucket: ${transcripts-bucket.id}
+      lambdaFunctions:
+        - lambdaFunctionArn: ${transcribe-callback-lambda.arn}
+          events:
+            - s3:ObjectCreated:*
+          filterPrefix: transcriptions/
+
+  # Lambda Permission for S3 to invoke TranscribeCallback
+  transcribe-callback-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${transcribe-callback-lambda.name}
+      principal: s3.amazonaws.com
+      sourceArn: ${transcripts-bucket.arn}
+
+  # API Gateway HTTP API
+  mindpocket-api:
+    type: aws:apigatewayv2:Api
+    properties:
+      name: mindpocket-api
+      protocolType: HTTP
+      corsConfiguration:
+        allowCredentials: false
+        allowHeaders:
+          - content-type
+          - authorization
+        allowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        allowOrigins:
+          - "*"
+
+  # Cognito Authorizer for API Gateway
+  cognito-authorizer:
+    type: aws:apigatewayv2:Authorizer
+    properties:
+      apiId: ${mindpocket-api.id}
+      authorizerType: JWT
+      identitySources:
+        - $request.header.Authorization
+      jwtConfiguration:
+        audiences:
+          - ${mindpocket-user-pool-client.id}
+        issuer: https://cognito-idp.${aws:region}.amazonaws.com/${mindpocket-user-pool.id}
+
+  # API Gateway Integrations
+  ingest-link-integration:
+    type: aws:apigatewayv2:Integration
+    properties:
+      apiId: ${mindpocket-api.id}
+      integrationType: AWS_PROXY
+      integrationUri: ${ingest-link-lambda.invokeArn}
+      payloadFormatVersion: "2.0"
+
+  get-items-integration:
+    type: aws:apigatewayv2:Integration
+    properties:
+      apiId: ${mindpocket-api.id}
+      integrationType: AWS_PROXY
+      integrationUri: ${get-items-lambda.invokeArn}
+      payloadFormatVersion: "2.0"
+
+  get-item-integration:
+    type: aws:apigatewayv2:Integration
+    properties:
+      apiId: ${mindpocket-api.id}
+      integrationType: AWS_PROXY
+      integrationUri: ${get-item-lambda.invokeArn}
+      payloadFormatVersion: "2.0"
+
+  # API Gateway Routes
+  ingest-link-route:
+    type: aws:apigatewayv2:Route
+    properties:
+      apiId: ${mindpocket-api.id}
+      routeKey: "POST /items/ingest"
+      target: integrations/${ingest-link-integration.id}
+      authorizationType: JWT
+      authorizerId: ${cognito-authorizer.id}
+
+  get-items-route:
+    type: aws:apigatewayv2:Route
+    properties:
+      apiId: ${mindpocket-api.id}
+      routeKey: "GET /items"
+      target: integrations/${get-items-integration.id}
+      authorizationType: JWT
+      authorizerId: ${cognito-authorizer.id}
+
+  get-item-route:
+    type: aws:apigatewayv2:Route
+    properties:
+      apiId: ${mindpocket-api.id}
+      routeKey: "GET /items/{itemId}"
+      target: integrations/${get-item-integration.id}
+      authorizationType: JWT
+      authorizerId: ${cognito-authorizer.id}
+
+  # API Gateway Stage
+  api-stage:
+    type: aws:apigatewayv2:Stage
+    properties:
+      apiId: ${mindpocket-api.id}
+      name: $default
+      autoDeploy: true
+
+  # Lambda Permissions for API Gateway
+  ingest-link-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${ingest-link-lambda.name}
+      principal: apigateway.amazonaws.com
+      sourceArn: ${mindpocket-api.executionArn}/*/*
+
+  get-items-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${get-items-lambda.name}
+      principal: apigateway.amazonaws.com
+      sourceArn: ${mindpocket-api.executionArn}/*/*
+
+  get-item-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${get-item-lambda.name}
+      principal: apigateway.amazonaws.com
+      sourceArn: ${mindpocket-api.executionArn}/*/*
+
+outputs:
+  # Amplify outputs
+  appId: ${mindpocket-app.id}
+  appArn: ${mindpocket-app.arn}
+  defaultDomain: ${mindpocket-app.defaultDomain}
+  branchUrl: https://${main-branch.branchName}.${mindpocket-app.id}.amplifyapp.com
+  
+  # Cognito outputs
+  cognitoUserPoolId: ${mindpocket-user-pool.id}
+  cognitoUserPoolClientId: ${mindpocket-user-pool-client.id}
+  cognitoRegion: ${aws:region}
+  
+  # API Gateway outputs
+  apiUrl: ${mindpocket-api.apiEndpoint}
+  apiId: ${mindpocket-api.id}
+  
+  # DynamoDB outputs
+  wellnessItemsTableName: ${wellness-items-table.name}
+  wellnessItemsTableArn: ${wellness-items-table.arn}
+  
+  # S3 outputs
+  rawMediaBucketName: ${raw-media-bucket.id}
+  transcriptsBucketName: ${transcripts-bucket.id}
+  
+  # SQS outputs
+  processTikTokQueueUrl: ${process-tiktok-queue.url}
+  processTikTokDlqUrl: ${process-tiktok-dlq.url}
+
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-yaml

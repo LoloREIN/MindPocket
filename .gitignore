@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+!Frontend/lib/
 lib64/
 parts/
 sdist/
@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Next.js Frontend
+Frontend/.next/
+Frontend/out/
+Frontend/build/
+Frontend/dist/
+Frontend/.env*.local
+
+# Pulumi
+Pulumi/bin/
+Pulumi/obj/
+Pulumi/.pulumi/
