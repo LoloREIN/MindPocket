@@ -89,20 +89,17 @@ resources:
                 - echo "Building Next.js application (already in Frontend folder)"
                 - npm run build
           artifacts:
-            baseDirectory: Frontend/dist
+            baseDirectory: Frontend
             files:
-              - '**/*'
+              - '.next/**/*'
+              - 'node_modules/**/*'
+              - 'package.json'
+              - 'next.config.mjs'
+              - 'public/**/*'
           cache:
             paths:
               - Frontend/node_modules/**/*
               - Frontend/.next/cache/**/*
-      customRules:
-        - source: /<*>
-          status: "404-200"
-          target: /index.html
-        - source: "/_next/static/<*>"
-          status: "200"
-          target: "/_next/static/<*>"
       environmentVariables:
         NODE_ENV: production
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
