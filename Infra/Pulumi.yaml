@@ -76,22 +76,31 @@ resources:
           phases:
             preBuild:
               commands:
+                - echo "Monorepo structure - navigating to Frontend folder"
                 - cd Frontend
-                - pnpm install
+                - echo "Installing dependencies with npm"
+                - npm ci
             build:
               commands:
-                - pnpm run build
+                - echo "Building Next.js application"
+                - npm run build
           artifacts:
-            baseDirectory: Frontend/.next
+            baseDirectory: Frontend
             files:
-              - '**/*'
+              - '.next/**/*'
+              - 'public/**/*'
+              - 'package.json'
           cache:
             paths:
               - Frontend/node_modules/**/*
+              - Frontend/.next/cache/**/*
       customRules:
         - source: /<*>
           status: "404-200"
           target: /index.html
+        - source: "/_next/static/<*>"
+          status: "200"
+          target: "/_next/static/<*>"
       environmentVariables:
         NODE_ENV: production
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
@@ -107,7 +116,7 @@ resources:
       appId: ${mindpocket-app.id}
       branchName: main
       enableAutoBuild: true
-      framework: Next.js - SSG
+      framework: Next.js - SSR
 
   # Domain association (optional - commented out for now)
   # domain:
