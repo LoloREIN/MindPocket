@@ -10,8 +10,16 @@ exports.handler = async (event) => {
     
     try {
         // Extract userId from Cognito JWT claims
-        const userId = event.requestContext?.authorizer?.claims?.sub;
+        console.log('Authorizer context:', event.requestContext?.authorizer);
+        console.log('JWT claims:', event.requestContext?.authorizer?.claims);
+        
+        const userId = event.requestContext?.authorizer?.claims?.sub 
+                    || event.requestContext?.authorizer?.jwt?.claims?.sub;
+        
+        console.log('Extracted userId:', userId);
+        
         if (!userId) {
+            console.error('No userId found in token claims');
             return {
                 statusCode: 401,
                 headers: {
