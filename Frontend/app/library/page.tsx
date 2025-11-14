@@ -4,129 +4,128 @@ import { MobileHeader } from '@/components/mobile-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { UtensilsCrossed, Dumbbell, ListTodo, Sparkles, Calendar, CheckCircle2, Circle, Clock } from 'lucide-react'
-import { useState } from 'react'
+import { UtensilsCrossed, Dumbbell, Bookmark, Sparkles, Clock, Loader2, Package } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { apiClient, type WellnessItem, type ItemType } from '@/lib/api-client'
+import Link from 'next/link'
+import { StatusBadge } from '@/components/status-badge'
 
-const items = [
-  {
-    id: 1,
-    type: 'Receta',
-    title: 'Pasta cremosa saludable',
-    tags: ['rápido', 'alto en proteína'],
-    date: 'hace 2 horas',
-    status: 'pending',
-    origin: 'TikTok',
+const typeConfig = {
+  recipe: {
+    label: 'Receta',
     icon: UtensilsCrossed,
     iconColor: 'text-primary',
     iconBg: 'bg-primary/10',
-    duration: '20 min'
   },
-  {
-    id: 2,
-    type: 'Rutina',
-    title: 'Pierna 20 min',
-    tags: ['full body', 'sin equipo'],
-    date: 'hace 1 día',
-    status: 'done',
-    origin: 'TikTok',
+  workout: {
+    label: 'Rutina',
     icon: Dumbbell,
     iconColor: 'text-success',
     iconBg: 'bg-success/10',
-    duration: '20 min'
   },
-  {
-    id: 3,
-    type: 'Libro',
-    title: 'Atomic Habits',
-    tags: ['desarrollo personal'],
-    date: 'hace 3 días',
-    status: 'pending',
-    origin: 'TikTok',
-    icon: ListTodo,
+  pending: {
+    label: 'Pendiente',
+    icon: Bookmark,
     iconColor: 'text-chart-3',
     iconBg: 'bg-chart-3/10',
-    duration: '320 páginas'
   },
-  {
-    id: 4,
-    type: 'Receta',
-    title: 'Bowl de quinoa mediterráneo',
-    tags: ['vegano', 'saludable'],
-    date: 'hace 5 días',
-    status: 'done',
-    origin: 'TikTok',
-    icon: UtensilsCrossed,
-    iconColor: 'text-primary',
-    iconBg: 'bg-primary/10',
-    duration: '15 min'
-  },
-  {
-    id: 5,
-    type: 'Rutina',
-    title: 'Core y abdomen intenso',
-    tags: ['core', 'intermedio'],
-    date: 'hace 1 semana',
-    status: 'pending',
-    origin: 'TikTok',
-    icon: Dumbbell,
-    iconColor: 'text-success',
-    iconBg: 'bg-success/10',
-    duration: '15 min'
-  },
-  {
-    id: 6,
-    type: 'Película',
-    title: 'The Social Dilemma',
-    tags: ['documental', 'tecnología'],
-    date: 'hace 1 semana',
-    status: 'pending',
-    origin: 'TikTok',
-    icon: ListTodo,
-    iconColor: 'text-chart-3',
-    iconBg: 'bg-chart-3/10',
-    duration: '94 min'
-  },
-  {
-    id: 7,
-    type: 'Otro',
-    title: 'Tips de productividad',
-    tags: ['productividad', 'trabajo'],
-    date: 'hace 2 semanas',
-    status: 'done',
-    origin: 'TikTok',
+  other: {
+    label: 'Otro',
     icon: Sparkles,
     iconColor: 'text-chart-4',
     iconBg: 'bg-chart-4/10',
-    duration: ''
   },
-  {
-    id: 8,
-    type: 'Receta',
-    title: 'Smoothie energético pre-workout',
-    tags: ['bebida', 'energético'],
-    date: 'hace 2 semanas',
-    status: 'pending',
-    origin: 'TikTok',
-    icon: UtensilsCrossed,
-    iconColor: 'text-primary',
-    iconBg: 'bg-primary/10',
-    duration: '5 min'
-  },
-]
+}
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  
+  if (diffMins < 60) return `hace ${diffMins} min`
+  if (diffHours < 24) return `hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`
+  if (diffDays < 7) return `hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`
+  if (diffDays < 30) return `hace ${Math.floor(diffDays / 7)} semana${Math.floor(diffDays / 7) !== 1 ? 's' : ''}`
+  return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+}
 
 export default function LibraryPage() {
-  const [selectedFilter, setSelectedFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('recent')
+  const [items, setItems] = useState<WellnessItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [selectedFilter, setSelectedFilter] = useState<ItemType | 'all'>('all')
+
+  useEffect(() => {
+    fetchItems()
+  }, [])
+
+  const fetchItems = async () => {
+    try {
+      setIsLoading(true)
+      const data = await apiClient.getItems()
+      setItems(data)
+      setError('')
+    } catch (err: any) {
+      console.error('Failed to fetch items:', err)
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const filteredItems = items.filter(item => {
     if (selectedFilter === 'all') return true
-    return item.type.toLowerCase() === selectedFilter.toLowerCase()
+    return item.type === selectedFilter
   })
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <MobileHeader title="Biblioteca" />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen">
+        <MobileHeader title="Biblioteca" />
+        <div className="p-4">
+          <Card className="glass-card p-8 text-center">
+            <p className="text-muted-foreground">Error al cargar items: {error}</p>
+            <Button onClick={fetchItems} className="mt-4" size="sm">
+              Reintentar
+            </Button>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen">
+        <MobileHeader title="Biblioteca" />
+        <div className="p-4">
+          <Card className="glass-card p-8 text-center">
+            <Package className="mx-auto h-12 w-12 mb-4 opacity-20" />
+            <p className="text-lg font-medium">No hay items</p>
+            <p className="text-sm text-muted-foreground">Agrega tu primer TikTok para comenzar</p>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen">
-      <MobileHeader title="Biblioteca" />
+      <MobileHeader title="Biblioteca" onItemAdded={fetchItems} />
       
       <div className="p-4 space-y-4">
         {/* Filters */}
@@ -139,23 +138,23 @@ export default function LibraryPage() {
             Todos
           </Button>
           <Button
-            variant={selectedFilter === 'receta' ? 'default' : 'outline'}
+            variant={selectedFilter === 'recipe' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setSelectedFilter('receta')}
+            onClick={() => setSelectedFilter('recipe')}
           >
             Recetas
           </Button>
           <Button
-            variant={selectedFilter === 'rutina' ? 'default' : 'outline'}
+            variant={selectedFilter === 'workout' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setSelectedFilter('rutina')}
+            onClick={() => setSelectedFilter('workout')}
           >
             Rutinas
           </Button>
           <Button
-            variant={selectedFilter === 'libro' ? 'default' : 'outline'}
+            variant={selectedFilter === 'pending' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setSelectedFilter('libro')}
+            onClick={() => setSelectedFilter('pending')}
           >
             Pendientes
           </Button>
@@ -164,38 +163,46 @@ export default function LibraryPage() {
         {/* Items List - Simplified for mobile */}
         <div className="space-y-3">
           {filteredItems.map((item) => {
-            const Icon = item.icon
+            const config = typeConfig[item.type]
+            const Icon = config.icon
+            
             return (
-              <Card key={item.id} className="glass-card p-4 cursor-pointer">
-                <div className="flex items-start gap-3">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${item.iconBg}`}>
-                    <Icon className={`h-5 w-5 ${item.iconColor}`} />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">
-                        {item.type}
-                      </Badge>
-                      {item.status === 'done' && (
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                      )}
+              <Link key={item.itemId} href={`/items/${item.itemId}`}>
+                <Card className="glass-card p-4 cursor-pointer hover:bg-accent/50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${config.iconBg}`}>
+                      <Icon className={`h-5 w-5 ${config.iconColor}`} />
                     </div>
-                    <h3 className="font-semibold text-foreground text-sm mb-1">
-                      {item.title}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {item.duration && (
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="text-xs">
+                          {config.label}
+                        </Badge>
+                        <StatusBadge status={item.status} />
+                      </div>
+                      <h3 className="font-semibold text-foreground text-sm mb-1 line-clamp-2">
+                        {item.title || 'Sin título'}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {item.duration}
+                          {formatDate(item.createdAt)}
                         </span>
+                      </div>
+                      {item.tags && item.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {item.tags.slice(0, 3).map((tag, idx) => (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
-                      <span>{item.date}</span>
                     </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </Link>
             )
           })}
         </div>
