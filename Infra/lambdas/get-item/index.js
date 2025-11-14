@@ -62,13 +62,23 @@ exports.handler = async (event) => {
 
         // Transform DynamoDB item to plain object
         const item = {
-            userId: result.Item.userId?.S,
-            itemId: result.Item.itemId?.S,
-            sourceUrl: result.Item.sourceUrl?.S,
-            status: result.Item.status?.S,
-            type: result.Item.type?.S,
-            createdAt: result.Item.createdAt?.S,
-            updatedAt: result.Item.updatedAt?.S
+            userId: result.Item?.userId?.S,
+            itemId: result.Item?.itemId?.S,
+            sourceUrl: result.Item?.sourceUrl?.S,
+            status: result.Item?.status?.S,
+            type: result.Item?.type?.S,
+            title: result.Item?.title?.S,
+            tags: result.Item?.tags?.S ? JSON.parse(result.Item.tags.S) : [],
+            transcriptPreview: result.Item?.transcriptPreview?.S,
+            transcriptFull: result.Item?.transcriptFull?.S,
+            transcriptConfidence: result.Item?.transcriptConfidence?.S,
+            transcriptS3Key: result.Item?.transcriptS3Key?.S,
+            enrichedData: result.Item?.enrichedData?.S ? JSON.parse(result.Item.enrichedData.S) : null,
+            mediaS3Key: result.Item?.mediaS3Key?.S,
+            transcriptionJobName: result.Item?.transcriptionJobName?.S,
+            errorMessage: result.Item?.errorMessage?.S,
+            createdAt: result.Item?.createdAt?.S,
+            updatedAt: result.Item?.updatedAt?.S
         };
 
         return {

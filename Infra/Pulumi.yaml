@@ -427,6 +427,14 @@ resources:
                 "dynamodb:UpdateItem"
               ],
               "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
+              ],
+              "Resource": "arn:aws:bedrock:*::foundation-model/*"
             }
           ]
         }
@@ -553,10 +561,12 @@ resources:
       code:
         archiveType: zip
         path: ./lambdas/transcribe-callback
-      timeout: 60
+      timeout: 120
       environment:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          BEDROCK_MODEL_ID: anthropic.claude-3-sonnet-20240229-v1:0
+          BEDROCK_REGION: us-east-1
 
   get-items-lambda:
     type: aws:lambda:Function

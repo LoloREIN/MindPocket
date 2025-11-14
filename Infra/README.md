@@ -1,73 +1,134 @@
- # AWS S3 Bucket (Pulumi YAML)
+ # MindPocket Infrastructure - Phase 3 (AI-Powered)
 
- A minimal Pulumi YAML template that provisions an AWS S3 Bucket and exports its name.
+This Pulumi program deploys the complete Phase 3 infrastructure for MindPocket, including **AI-powered content analysis** with Amazon Bedrock and Claude Sonnet.
 
- ## Overview
+## 🏗️ Architecture Overview
 
- This template uses the AWS provider to create a single S3 bucket. It is a great starting point for projects that require simple object storage with minimal setup.
+### Phase 3 Components
+- **Cognito User Pool** - Authentication & authorization
+- **API Gateway** - RESTful API with JWT authorization
+- **DynamoDB** - WellnessItems table with enriched AI data
+- **S3 Buckets** - Raw media storage & transcripts
+- **SQS** - Async processing queue with DLQ
+- **Lambda Functions** - Complete TikTok → AI analysis pipeline
+- **AWS Transcribe** - Speech-to-text processing
+- **Amazon Bedrock** - Claude Sonnet 3 for content analysis
 
- ## Providers
+### Data Flow
+```
+Frontend → API Gateway → IngestLambda → DynamoDB + SQS
+                                           ↓
+SQS → ProcessTikTokLambda → TikTok API → S3 → Transcribe
+                                           ↓
+S3 (transcripts) → TranscribeCallbackLambda → Claude Sonnet → DynamoDB (READY)
+```
 
- - AWS
+### Status Progression
+```
+PENDING_DOWNLOAD → MEDIA_STORED → TRANSCRIBING → TRANSCRIBED → ENRICHING → READY
+                                                                        ↓
+                                                                   ENRICH_ERROR
+```
 
- ## Resources Created
+## 🚀 Deployment
 
- - aws:s3:BucketV2 (`my-bucket`): A basic S3 bucket.
+### Prerequisites
+1. AWS CLI configured with appropriate permissions
+2. Pulumi CLI installed
+3. Node.js 18+ for Lambda functions
+4. **Amazon Bedrock Model Access** - Enable Claude Sonnet in AWS Console
 
- ## Outputs
+### Enable Bedrock Models
+```bash
+# 1. Go to AWS Console → Amazon Bedrock → Model access
+# 2. Request access to Anthropic Claude models
+# 3. Wait for approval (usually instant for Claude 3 Sonnet)
+# 4. Verify model ID: anthropic.claude-3-sonnet-20240229-v1:0
+```
 
- - **bucketName**: The name (ID) of the created S3 bucket.
+### Deploy Infrastructure
+```bash
+# 1. Initialize Pulumi stack
+pulumi stack init dev
 
- ## Prerequisites
+# 2. Set AWS region
+pulumi config set aws:region us-east-1
 
- - Pulumi CLI configured and logged in to your chosen backend.
- - AWS credentials configured (environment variables, `~/.aws/credentials`, or `AWS_PROFILE`).
- - An AWS account with permissions to create S3 buckets.
+# 3. Install Lambda dependencies
+cd lambdas/process-tiktok && npm install && cd ../..
+cd lambdas/transcribe-callback && npm install && cd ../..
+cd lambdas/ingest-link && npm install && cd ../..
+cd lambdas/get-items && npm install && cd ../..
+cd lambdas/get-item && npm install && cd ../..
 
- ## Usage
+# 4. Deploy infrastructure
+pulumi up
 
- Initialize a new project from this template by running:
+# 5. Get outputs (save these for frontend configuration)
+pulumi stack output
+```
 
- ```bash
- pulumi new aws-yaml
- ```
+## 🤖 AI Analysis Features
 
- You will be prompted for:
- - A project name (default is set by the template).
- - A project description.
- - The AWS region to deploy into (default: `us-east-1`).
+### Structured Data Extraction
+Claude Sonnet analyzes transcripts and extracts:
 
- After initialization, deploy your stack:
+**Recipes:**
+```json
+{
+  "type": "recipe",
+  "title": "Avocado Toast Perfecto",
+  "recipe": {
+    "servings": 2,
+    "time_minutes": 10,
+    "difficulty": "easy",
+    "ingredients": ["2 rebanadas de pan", "1 aguacate maduro"],
+    "steps": ["Tostar el pan", "Machacar aguacate", "Servir"]
+  }
+}
+```
 
- ```bash
- pulumi up
- ```
+**Workouts:**
+```json
+{
+  "type": "workout", 
+  "title": "Rutina de Piernas en Casa",
+  "workout": {
+    "duration_minutes": 20,
+    "level": "intermediate",
+    "focus": ["legs", "glutes"],
+    "blocks": [
+      {"exercise": "squats", "reps": "3 x 15", "notes": "mantén la espalda recta"}
+    ]
+  }
+}
+```
 
- ## Project Layout
-
- After `pulumi new`, your directory will look like:
-
- ```
- .
- ├── Pulumi.yaml           # Project metadata and YAML program
- └── Pulumi.<stack>.yaml   # Stack configuration (e.g., aws:region)
-
-### Error Handling
-- **Invalid TikTok URLs**: Status = "ERROR" with error message
-- **Network failures**: SQS retry → DLQ after 3 attempts
-- **Transcribe failures**: Error status in DynamoDB
-
-## 🔧 Configuration
+**Pending Items:**
+```json
+{
+  "type": "pending",
+  "title": "Libro Recomendado",
+  "pending": {
+    "category": "book",
+    "name": "Atomic Habits",
+    "platform": "Amazon",
+    "notes": "Para mejorar productividad"
+  }
+}
+```
 
 ### Environment Variables (Auto-configured)
 - `WELLNESS_ITEMS_TABLE` - DynamoDB table name
 - `RAW_MEDIA_BUCKET` - S3 bucket for media files
 - `TRANSCRIPTS_BUCKET` - S3 bucket for transcripts
-- `PROCESS_TIKTOK_QUEUE_URL` - SQS queue URL
+- `BEDROCK_MODEL_ID` - Claude Sonnet model identifier
+- `BEDROCK_REGION` - Bedrock service region
 
 ### Lambda Timeouts
 - **IngestLambda**: 30s (API response)
 - **ProcessTikTokLambda**: 60s (TikTok download + S3 upload)
+- **TranscribeCallbackLambda**: 120s (Transcript + AI analysis)
 - **TranscribeCallbackLambda**: 60s (Transcript processing)
 - **GetItems/GetItemLambda**: 30s (Database queries)
 

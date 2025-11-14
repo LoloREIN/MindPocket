@@ -50,6 +50,12 @@ exports.handler = async (event) => {
             sourceUrl: item.sourceUrl?.S,
             status: item.status?.S,
             type: item.type?.S,
+            title: item.title?.S,
+            tags: item.tags?.S ? JSON.parse(item.tags.S) : [],
+            transcriptPreview: item.transcriptPreview?.S,
+            transcriptConfidence: item.transcriptConfidence?.S,
+            enrichedData: item.enrichedData?.S ? JSON.parse(item.enrichedData.S) : null,
+            errorMessage: item.errorMessage?.S,
             createdAt: item.createdAt?.S,
             updatedAt: item.updatedAt?.S
         })) || [];
