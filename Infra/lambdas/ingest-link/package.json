@@ -1,0 +1,11 @@
+{
+  "name": "ingest-link-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to ingest TikTok links",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-sqs": "^3.600.0",
+    "uuid": "^10.0.0"
+  }
+}

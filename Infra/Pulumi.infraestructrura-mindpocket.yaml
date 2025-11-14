@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-1
+  amplify:accessToken:
+    secure: AAABABtlD5HeNv3+N4uJK83C/5caSoun9Vt2RdjxM63BtNEwOFipH8Z0KYt9krtfqwpI08WPnkCUc2m0KrLa7sELm3tWQkT6z9/8Vx9lf9UkEn0v1xPEqeihDWMvSqY5expQ/hE3v6ibZFIDc77zudq5pRJXCij34JGN6lo=
