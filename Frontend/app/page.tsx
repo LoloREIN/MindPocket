@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { MobileHeader } from '@/components/mobile-header';
-import { AddTikTokForm } from '@/components/add-tiktok-form';
 import { ItemsList } from '@/components/items-list';
 
 export default function DashboardPage() {
@@ -14,10 +13,9 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <MobileHeader title="MindPocket" />
+      <MobileHeader title="MindPocket" onItemAdded={handleSuccess} />
       
       <div className="p-4 space-y-6">
-        <AddTikTokForm onSuccess={handleSuccess} />
         <ItemsList refreshTrigger={refreshTrigger} />
       </div>
     </div>
