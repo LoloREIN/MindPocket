@@ -72,7 +72,8 @@ class ApiClient {
         hasAccessToken: !!session.tokens?.accessToken,
       });
       
-      const token = session.tokens?.idToken?.toString();
+      // Use accessToken for API Gateway JWT Authorizer
+      const token = session.tokens?.accessToken?.toString();
       
       if (!token) {
         console.error('❌ No authentication token available');
@@ -80,7 +81,7 @@ class ApiClient {
         throw new Error('No authentication token available');
       }
       
-      console.log('✅ Token obtained, length:', token.length);
+      console.log('✅ Access Token obtained, length:', token.length);
       // Log first and last 20 characters for debugging
       console.log('Token preview:', token.substring(0, 20) + '...' + token.substring(token.length - 20));
       return token;
@@ -98,15 +99,21 @@ class ApiClient {
     
     const url = `${API_BASE_URL}${path}`;
     
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+    };
+    
     console.log(`🌐 API Request: ${options.method || 'GET'} ${url}`);
+    console.log('📨 Request Headers:', {
+      'Content-Type': headers['Content-Type'],
+      'Authorization': `Bearer ${token.substring(0, 20)}...${token.substring(token.length - 20)}`
+    });
     
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {}),
-      },
+      headers,
     });
 
     if (!response.ok) {
