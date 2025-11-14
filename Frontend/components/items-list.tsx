@@ -109,7 +109,7 @@ export function ItemsList({ refreshTrigger }: ItemsListProps) {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
-          <Link key={item.itemId} href={`/items/${item.itemId}`}>
+          <div key={item.itemId}>
             <Card className="h-full hover:bg-accent/50 transition-colors cursor-pointer">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -149,7 +149,7 @@ export function ItemsList({ refreshTrigger }: ItemsListProps) {
                 )}
               </CardContent>
             </Card>
-          </Link>
+          </div>
         ))}
       </div>
     </div>

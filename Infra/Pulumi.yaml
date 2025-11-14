@@ -89,13 +89,9 @@ resources:
                 - echo "Building Next.js application (already in Frontend folder)"
                 - npm run build
           artifacts:
-            baseDirectory: Frontend
+            baseDirectory: Frontend/out
             files:
-              - '.next/**/*'
-              - 'node_modules/**/*'
-              - 'package.json'
-              - 'next.config.mjs'
-              - 'public/**/*'
+              - '**/*'
           cache:
             paths:
               - Frontend/node_modules/**/*
@@ -115,7 +111,7 @@ resources:
       appId: ${mindpocket-app.id}
       branchName: main
       enableAutoBuild: true
-      framework: Next.js - SSR
+      framework: Web
 
   # Domain association (optional - commented out for now)
   # domain:
