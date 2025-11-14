@@ -217,3 +217,7 @@ Frontend/.env*.local
 Pulumi/bin/
 Pulumi/obj/
 Pulumi/.pulumi/
+
+# Lambdas - Node.js dependencies
+Infra/lambdas/*/node_modules/
+Infra/lambdas/*/package-lock.json

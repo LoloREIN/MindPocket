@@ -132,7 +132,7 @@ class ApiClient {
   async ingestTikTok(url: string): Promise<IngestResponse> {
     return this.request<IngestResponse>('/items/ingest', {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ sourceUrl: url }),
     });
   }
 
