@@ -42,7 +42,7 @@ export function LoginForm({ onSuccess, onSwitchToSignUp, onSwitchToForgotPasswor
       } else if (result.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
         // Handle new password required
         setError('Se requiere cambio de contraseña')
-      } else if (result.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_SMS_MFA_CODE') {
+      } else if (result.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE') {
         setNeedsConfirmation(true)
       }
     } catch (err: any) {
@@ -128,7 +128,7 @@ export function LoginForm({ onSuccess, onSwitchToSignUp, onSwitchToForgotPasswor
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              placeholder="usuario@ejemplo.com"
+              placeholder="usuario123 o usuario@ejemplo.com"
               required
             />
           </div>

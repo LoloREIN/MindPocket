@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { BottomNav } from '@/components/bottom-nav'
 import { AuthWrapper } from '@/components/auth/auth-wrapper'
-import '@/lib/auth-config'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });

@@ -1,7 +1,42 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Amplify } from 'aws-amplify'
 import { getCurrentUser, signOut } from 'aws-amplify/auth'
+
+// Configure Amplify directly in the component
+const amplifyConfig = {
+  Auth: {
+    Cognito: {
+      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
+      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID!,
+      region: process.env.NEXT_PUBLIC_COGNITO_REGION!,
+      signUpVerificationMethod: 'code' as const,
+      loginWith: {
+        email: true,
+        username: true,
+      },
+    },
+  },
+  API: {
+    REST: {
+      MindPocketAPI: {
+        endpoint: process.env.NEXT_PUBLIC_API_URL!,
+        region: process.env.NEXT_PUBLIC_API_REGION!,
+      },
+    },
+  },
+}
+
+// Configure Amplify
+console.log('🔧 Configuring Amplify in AuthWrapper...')
+console.log('Environment variables:', {
+  userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID,
+  clientId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID,
+  region: process.env.NEXT_PUBLIC_COGNITO_REGION,
+  apiUrl: process.env.NEXT_PUBLIC_API_URL,
+})
+Amplify.configure(amplifyConfig)
 import { LoginForm } from './login-form'
 import { SignUpForm } from './signup-form'
 import { ForgotPasswordForm } from './forgot-password-form'

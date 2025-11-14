@@ -7,8 +7,8 @@ resources:
     type: aws:cognito:UserPool
     properties:
       name: mindpocket-users
-      usernameAttributes:
-        - email
+      # usernameAttributes:
+      #   - email  # Commented out to allow independent usernames
       autoVerifiedAttributes:
         - email
       passwordPolicy:
@@ -89,11 +89,9 @@ resources:
                 - echo "Building Next.js application (already in Frontend folder)"
                 - npm run build
           artifacts:
-            baseDirectory: Frontend
+            baseDirectory: Frontend/dist
             files:
-              - '.next/**/*'
-              - 'public/**/*'
-              - 'package.json'
+              - '**/*'
           cache:
             paths:
               - Frontend/node_modules/**/*

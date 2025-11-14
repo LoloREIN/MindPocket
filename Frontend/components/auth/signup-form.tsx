@@ -82,7 +82,9 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
         username: formData.username,
         confirmationCode,
       })
-      onSuccess?.()
+      // After successful confirmation, show success message and redirect to login
+      alert('¡Cuenta confirmada exitosamente! Ahora puedes iniciar sesión.')
+      onSwitchToLogin?.()
     } catch (err: any) {
       setError(err.message || 'Código de confirmación inválido')
     } finally {
