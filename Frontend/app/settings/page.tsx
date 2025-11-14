@@ -9,13 +9,50 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { User, MessageSquare, Globe, Bell, Download, Trash2, CheckCircle2, XCircle } from 'lucide-react'
-import { useState } from 'react'
+import { User, MessageSquare, Globe, Bell, Download, Trash2, CheckCircle2, XCircle, LogOut } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { fetchUserAttributes, signOut } from 'aws-amplify/auth'
 
 export default function SettingsPage() {
   const [whatsappConnected, setWhatsappConnected] = useState(true)
   const [notifications, setNotifications] = useState(true)
   const [weeklyDigest, setWeeklyDigest] = useState(true)
+  const [userName, setUserName] = useState('')
+  const [userEmail, setUserEmail] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadUserData() {
+      try {
+        const attributes = await fetchUserAttributes()
+        setUserName(attributes.name || attributes.preferred_username || '')
+        setUserEmail(attributes.email || '')
+      } catch (error) {
+        console.error('Error fetching user attributes:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadUserData()
+  }, [])
+
+  const getInitials = (name: string) => {
+    if (!name) return '??'
+    const parts = name.split(' ')
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase()
+    }
+    return name.substring(0, 2).toUpperCase()
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      // AuthWrapper detectará automáticamente el cambio de estado y mostrará el login
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error)
+    }
+  }
 
   return (
     <div className="min-h-screen">
@@ -32,9 +69,9 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-16 w-16">
-                <AvatarImage src="/placeholder.svg" alt="John Doe" />
+                <AvatarImage src="/placeholder.svg" alt={userName} />
                 <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                  JD
+                  {loading ? '...' : getInitials(userName)}
                 </AvatarFallback>
               </Avatar>
               <div>
@@ -47,11 +84,24 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-xs">Nombre completo</Label>
-                <Input id="name" defaultValue="John Doe" className="bg-muted/30 h-9" />
+                <Input 
+                  id="name" 
+                  value={loading ? 'Cargando...' : userName} 
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="bg-muted/30 h-9" 
+                  disabled={loading}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-xs">Correo electrónico</Label>
-                <Input id="email" type="email" defaultValue="john@example.com" className="bg-muted/30 h-9" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={loading ? 'Cargando...' : userEmail} 
+                  readOnly
+                  className="bg-muted/30 h-9" 
+                  disabled={loading}
+                />
               </div>
             </div>
 
@@ -185,6 +235,16 @@ export default function SettingsPage() {
             <Button variant="outline" size="sm" className="w-full justify-start gap-2">
               <Download className="h-4 w-4" />
               Exportar datos
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full justify-start gap-2"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-4 w-4" />
+              Cerrar sesión
             </Button>
 
             <Button variant="outline" size="sm" className="w-full justify-start gap-2 border-destructive/30 text-destructive hover:bg-destructive/10">
