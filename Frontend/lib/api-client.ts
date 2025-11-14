@@ -63,16 +63,29 @@ export interface IngestResponse {
 class ApiClient {
   private async getAuthToken(): Promise<string> {
     try {
-      const session = await fetchAuthSession();
+      console.log('🔐 Fetching auth session...');
+      // Force refresh to ensure we get a valid token
+      const session = await fetchAuthSession({ forceRefresh: false });
+      console.log('📋 Session:', {
+        hasTokens: !!session.tokens,
+        hasIdToken: !!session.tokens?.idToken,
+        hasAccessToken: !!session.tokens?.accessToken,
+      });
+      
       const token = session.tokens?.idToken?.toString();
       
       if (!token) {
+        console.error('❌ No authentication token available');
+        console.error('Session details:', JSON.stringify(session, null, 2));
         throw new Error('No authentication token available');
       }
       
+      console.log('✅ Token obtained, length:', token.length);
+      // Log first and last 20 characters for debugging
+      console.log('Token preview:', token.substring(0, 20) + '...' + token.substring(token.length - 20));
       return token;
     } catch (error) {
-      console.error('Failed to get auth token:', error);
+      console.error('❌ Failed to get auth token:', error);
       throw new Error('Authentication required');
     }
   }
@@ -134,7 +147,8 @@ class ApiClient {
     const queryString = params.toString();
     const path = queryString ? `/items?${queryString}` : '/items';
     
-    return this.request<WellnessItem[]>(path);
+    const response = await this.request<{ items: WellnessItem[]; count: number }>(path);
+    return response.items || [];
   }
 
   // GET /items/{itemId}
