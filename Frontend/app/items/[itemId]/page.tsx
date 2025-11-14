@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+
+// Required for static export with dynamic routes
+export function generateStaticParams() {
+  return [];
+}
 import { apiClient, type WellnessItem } from '@/lib/api-client';
 import { RecipeView } from '@/components/item-detail/recipe-view';
 import { WorkoutView } from '@/components/item-detail/workout-view';

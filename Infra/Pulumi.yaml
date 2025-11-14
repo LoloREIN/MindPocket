@@ -88,16 +88,12 @@ resources:
                 - echo "Directory contents:" && ls -la
                 - echo "Building Next.js application (already in Frontend folder)"
                 - npm run build
-                - echo "=== POST BUILD - Copying static files for standalone ==="
-                - cp -r public .next/standalone/
-                - cp -r .next/static .next/standalone/.next/
+                - echo "=== BUILD COMPLETE - Checking out folder ==="
+                - ls -la out/
           artifacts:
-            baseDirectory: Frontend
+            baseDirectory: Frontend/out
             files:
-              - '.next/standalone/**/*'
-              - '.next/static/**/*'
-              - 'public/**/*'
-              - 'package.json'
+              - '**/*'
           cache:
             paths:
               - Frontend/node_modules/**/*
@@ -117,7 +113,7 @@ resources:
       appId: ${mindpocket-app.id}
       branchName: main
       enableAutoBuild: true
-      framework: Next.js - SSR
+      framework: Web
 
   # Domain association (optional - commented out for now)
   # domain:
