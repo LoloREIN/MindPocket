@@ -194,6 +194,60 @@ resources:
         - applyServerSideEncryptionByDefault:
             sseAlgorithm: AES256
 
+  # S3 Bucket Policy for Raw Media - Allow Transcribe to read
+  raw-media-bucket-policy:
+    type: aws:s3:BucketPolicy
+    properties:
+      bucket: ${raw-media-bucket.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowTranscribeRead",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "transcribe.amazonaws.com"
+              },
+              "Action": [
+                "s3:GetObject",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": [
+                "${raw-media-bucket.arn}",
+                "${raw-media-bucket.arn}/*"
+              ]
+            }
+          ]
+        }
+
+  # S3 Bucket Policy for Transcripts - Allow Transcribe to write
+  transcripts-bucket-policy:
+    type: aws:s3:BucketPolicy
+    properties:
+      bucket: ${transcripts-bucket.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowTranscribeWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "transcribe.amazonaws.com"
+              },
+              "Action": [
+                "s3:PutObject",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": [
+                "${transcripts-bucket.arn}",
+                "${transcripts-bucket.arn}/*"
+              ]
+            }
+          ]
+        }
+
   # SQS Dead Letter Queue
   process-tiktok-dlq:
     type: aws:sqs:Queue
@@ -209,7 +263,7 @@ resources:
     type: aws:sqs:Queue
     properties:
       name: mindpocket-process-tiktok-queue
-      visibilityTimeoutSeconds: 300  # 5 minutes
+      visibilityTimeoutSeconds: 360  # 6 minutes (6x Lambda timeout)
       messageRetentionSeconds: 1209600  # 14 days
       redrivePolicy: |
         {
@@ -312,6 +366,21 @@ resources:
                 "dynamodb:UpdateItem"
               ],
               "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl"
+              ],
+              "Resource": "${raw-media-bucket.arn}/*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "transcribe:StartTranscriptionJob"
+              ],
+              "Resource": "*"
             }
           ]
         }
@@ -467,10 +536,12 @@ resources:
       code:
         archiveType: zip
         path: ./lambdas/process-tiktok
-      timeout: 300
+      timeout: 60
       environment:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          RAW_MEDIA_BUCKET: ${raw-media-bucket.id}
+          TRANSCRIPTS_BUCKET: ${transcripts-bucket.id}
 
   transcribe-callback-lambda:
     type: aws:lambda:Function
@@ -523,8 +594,8 @@ resources:
     properties:
       eventSourceArn: ${process-tiktok-queue.arn}
       functionName: ${process-tiktok-lambda.arn}
-      batchSize: 10
-      maximumBatchingWindowInSeconds: 5
+      batchSize: 1
+      maximumBatchingWindowInSeconds: 0
 
   # S3 Bucket Notification for TranscribeCallback Lambda
   transcripts-bucket-notification:
