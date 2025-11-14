@@ -1,0 +1,9 @@
+{
+  "name": "get-item-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to get a specific item",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0"
+  }
+}

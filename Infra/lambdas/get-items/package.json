@@ -1,0 +1,9 @@
+{
+  "name": "get-items-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to get user items",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0"
+  }
+}
