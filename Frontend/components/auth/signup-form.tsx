@@ -7,7 +7,27 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Phone } from 'lucide-react'
+
+// Validate international phone format
+const isValidPhoneNumber = (phone: string): boolean => {
+  // Must start with + and have 10-15 digits
+  const phoneRegex = /^\+[1-9]\d{9,14}$/
+  return phoneRegex.test(phone)
+}
+
+// Format phone number as user types
+const formatPhoneNumber = (value: string): string => {
+  // Remove all non-digit characters except +
+  let cleaned = value.replace(/[^\d+]/g, '')
+  
+  // Ensure it starts with +
+  if (cleaned && !cleaned.startsWith('+')) {
+    cleaned = '+' + cleaned
+  }
+  
+  return cleaned
+}
 
 interface SignUpFormProps {
   onSuccess?: () => void
@@ -29,6 +49,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
   const [error, setError] = useState('')
   const [needsConfirmation, setNeedsConfirmation] = useState(false)
   const [confirmationCode, setConfirmationCode] = useState('')
+  const [phoneError, setPhoneError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,6 +64,13 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
 
     if (formData.password.length < 8) {
       setError('La contraseña debe tener al menos 8 caracteres')
+      setIsLoading(false)
+      return
+    }
+
+    // Validate phone number format
+    if (!isValidPhoneNumber(formData.phoneNumber)) {
+      setError('El número de teléfono debe tener formato internacional (+52... para México)')
       setIsLoading(false)
       return
     }
@@ -189,15 +217,38 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Teléfono</Label>
-            <Input
-              id="phoneNumber"
-              type="tel"
-              value={formData.phoneNumber}
-              onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-              placeholder="+1234567890"
-              required
-            />
+            <Label htmlFor="phoneNumber">Teléfono (con código de país)</Label>
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <Phone className="h-4 w-4" />
+              </div>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                value={formData.phoneNumber}
+                onChange={(e) => {
+                  const formatted = formatPhoneNumber(e.target.value)
+                  setFormData({ ...formData, phoneNumber: formatted })
+                  
+                  // Validate and show error
+                  if (formatted && !isValidPhoneNumber(formatted)) {
+                    setPhoneError('Formato: +52 (México) o +1 (USA) seguido de 10 dígitos')
+                  } else {
+                    setPhoneError('')
+                  }
+                }}
+                placeholder="+521234567890"
+                className="pl-10"
+                required
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {phoneError ? (
+                <span className="text-destructive">{phoneError}</span>
+              ) : (
+                <span>Ejemplo México: +521234567890 • USA: +11234567890</span>
+              )}
+            </p>
           </div>
 
           <div className="space-y-2">
