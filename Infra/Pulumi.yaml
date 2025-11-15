@@ -397,7 +397,10 @@ resources:
                 "bedrock:InvokeModel",
                 "bedrock:InvokeModelWithResponseStream"
               ],
-              "Resource": "arn:aws:bedrock:*::foundation-model/*"
+              "Resource": [
+                "arn:aws:bedrock:*::foundation-model/*",
+                "arn:aws:bedrock:*:*:inference-profile/*"
+              ]
             }
           ]
         }
@@ -451,7 +454,10 @@ resources:
                 "bedrock:InvokeModel",
                 "bedrock:InvokeModelWithResponseStream"
               ],
-              "Resource": "arn:aws:bedrock:*::foundation-model/*"
+              "Resource": [
+                "arn:aws:bedrock:*::foundation-model/*",
+                "arn:aws:bedrock:*:*:inference-profile/*"
+              ]
             }
           ]
         }
@@ -566,7 +572,7 @@ resources:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
           RAW_MEDIA_BUCKET: ${raw-media-bucket.id}
           TRANSCRIPTS_BUCKET: ${transcripts-bucket.id}
-          BEDROCK_MODEL_ID: anthropic.claude-3-5-haiku-20241022-v1:0
+          BEDROCK_MODEL_ID: us.anthropic.claude-3-5-haiku-20241022-v1:0
           BEDROCK_REGION: us-east-1
           GOOGLE_CREDENTIALS_JSON:
             fn::toJSON: ${google-credentials-json}
@@ -584,7 +590,7 @@ resources:
       environment:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
-          BEDROCK_MODEL_ID: anthropic.claude-3-5-haiku-20241022-v1:0
+          BEDROCK_MODEL_ID: us.anthropic.claude-3-5-haiku-20241022-v1:0
           BEDROCK_REGION: us-east-1
 
   get-items-lambda:
