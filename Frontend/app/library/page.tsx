@@ -163,7 +163,9 @@ export default function LibraryPage() {
         {/* Items List - Simplified for mobile */}
         <div className="space-y-3">
           {filteredItems.map((item) => {
-            const config = typeConfig[item.type]
+            // Use 'other' as fallback for unknown types
+            const itemType = (item.type === 'UNKNOWN' || !typeConfig[item.type]) ? 'other' : item.type
+            const config = typeConfig[itemType]
             const Icon = config.icon
             
             return (

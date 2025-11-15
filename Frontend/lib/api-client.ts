@@ -12,7 +12,7 @@ export type ItemStatus =
   | 'ERROR' 
   | 'ENRICH_ERROR';
 
-export type ItemType = 'recipe' | 'workout' | 'pending' | 'other';
+export type ItemType = 'recipe' | 'workout' | 'pending' | 'other' | 'UNKNOWN';
 
 export interface WellnessItem {
   itemId: string;
@@ -24,6 +24,7 @@ export interface WellnessItem {
   tags?: string[];
   createdAt: string;
   updatedAt: string;
+  transcript?: string;
   transcriptPreview?: string;
   enrichedData?: {
     recipe?: {
