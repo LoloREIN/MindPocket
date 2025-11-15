@@ -1,0 +1,11 @@
+{
+  "name": "telegram-webhook-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to handle Telegram webhook for MindPocket",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-sqs": "^3.600.0",
+    "uuid": "^10.0.0"
+  }
+}
