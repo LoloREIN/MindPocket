@@ -1,76 +1,203 @@
 const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const { TranscribeClient, StartTranscriptionJobCommand } = require('@aws-sdk/client-transcribe');
-const Tiktok = require('@tobyg74/tiktok-api-dl');
+const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+const speech = require('@google-cloud/speech');
 const fetch = require('node-fetch');
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
-const transcribeClient = new TranscribeClient({ region: process.env.AWS_REGION });
+const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
+
+// Initialize Google Speech client with Service Account credentials
+let speechClient = null;
+if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    try {
+        const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        speechClient = new speech.SpeechClient({ credentials });
+        console.log('✅ Google Speech client initialized');
+    } catch (error) {
+        console.error('❌ Failed to initialize Google Speech:', error.message);
+    }
+} else {
+    console.warn('⚠️ GOOGLE_CREDENTIALS_JSON not set');
+}
 
 async function downloadTikTokAudio(url) {
     console.log('Downloading TikTok audio from:', url);
     
     try {
-        const result = await Tiktok.Downloader(url, {
-            version: "v1",
-            showOriginalResponse: true
+        // Use tikwm.com API - more reliable and no rate limits
+        const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`;
+        
+        console.log('Calling tikwm API:', apiUrl);
+        const response = await fetch(apiUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
+            }
         });
         
-        console.log('TikTok API response structure:', JSON.stringify(result, null, 2));
-        
-        const media = result?.result;
-        if (!media) {
-            throw new Error('No media in TikTok response');
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
         }
-
-        // Try to find audio URL - check different possible locations
+        
+        const result = await response.json();
+        console.log('API response code:', result.code);
+        console.log('API response keys:', Object.keys(result.data || {}));
+        
+        if (result.code !== 0) {
+            throw new Error(`TikTok API error: ${result.msg || 'Unknown error'}`);
+        }
+        
+        const data = result.data;
+        if (!data) {
+            throw new Error('No data in TikTok response');
+        }
+        
+        // Extract title and audio URL
+        const title = data.title || 'Untitled TikTok';
+        console.log('TikTok title:', title);
+        
+        // Try to get audio/video URL
+        // Priority: music > hdplay > play
         let audioUrl = null;
         
-        // Try music first (common in TikTok responses)
-        if (media.music?.url) {
-            audioUrl = media.music.url;
-            console.log('Found audio URL in music:', audioUrl);
+        if (data.music) {
+            audioUrl = data.music;
+            console.log('Using music URL');
+        } else if (data.hdplay) {
+            audioUrl = data.hdplay;
+            console.log('Using HD video URL');
+        } else if (data.play) {
+            audioUrl = data.play;
+            console.log('Using standard video URL');
         }
         
-        // Try medias array for audio-only content
-        if (!audioUrl && Array.isArray(media.medias)) {
-            const audioMedia = media.medias.find(m => 
-                m.url && (m.type === 'audio' || m.url.includes('audio') || m.url.includes('.mp3'))
-            );
-            if (audioMedia) {
-                audioUrl = audioMedia.url;
-                console.log('Found audio URL in medias:', audioUrl);
-            }
-        }
-        
-        // Fallback: use video URL (we'll extract audio later if needed)
-        if (!audioUrl && media.video?.url) {
-            audioUrl = media.video.url;
-            console.log('Using video URL as fallback:', audioUrl);
-        }
-
         if (!audioUrl) {
-            throw new Error('No audio or video URL found in TikTok result');
+            console.error('Available data fields:', Object.keys(data));
+            throw new Error('No audio/video URL found in response');
         }
 
         // Download the audio/video file
-        console.log('Fetching audio from URL:', audioUrl);
-        const response = await fetch(audioUrl);
+        console.log('Downloading from:', audioUrl);
+        const mediaResponse = await fetch(audioUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.tiktok.com/'
+            }
+        });
         
-        if (!response.ok) {
-            throw new Error(`Audio download failed: ${response.status} ${response.statusText}`);
+        if (!mediaResponse.ok) {
+            throw new Error(`Media download failed: ${mediaResponse.status} ${mediaResponse.statusText}`);
         }
 
-        const arrayBuffer = await response.arrayBuffer();
+        const arrayBuffer = await mediaResponse.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         
-        console.log('Downloaded audio buffer size:', buffer.length);
-        return buffer;
+        console.log('Downloaded media buffer size:', buffer.length, 'bytes');
+        return { buffer, title };
         
     } catch (error) {
         console.error('Error downloading TikTok audio:', error);
         throw new Error(`TikTok download failed: ${error.message}`);
+    }
+}
+
+async function transcribeAudio(audioBuffer) {
+    console.log('Starting audio transcription with Google Speech-to-Text...');
+    
+    try {
+        if (!speechClient) {
+            throw new Error('Google Speech client not initialized');
+        }
+        
+        // Convert audio buffer to base64
+        const audioBytes = audioBuffer.toString('base64');
+
+        // Configure request for Spanish audio
+        const request = {
+            audio: {
+                content: audioBytes,
+            },
+            config: {
+                encoding: 'MP3',
+                sampleRateHertz: 16000,
+                languageCode: 'es-MX',
+                alternativeLanguageCodes: ['es-ES', 'es-US'],
+                enableAutomaticPunctuation: true,
+                model: 'default',
+            },
+        };
+
+        console.log('Sending audio to Google Speech API...');
+        const [response] = await speechClient.recognize(request);
+        
+        if (!response.results || response.results.length === 0) {
+            throw new Error('No transcription results returned');
+        }
+        
+        const transcription = response.results
+            .map(result => result.alternatives[0].transcript)
+            .join('\n');
+
+        if (!transcription || transcription.trim().length === 0) {
+            throw new Error('Empty transcription result');
+        }
+
+        console.log('Transcription successful:', transcription.substring(0, 100) + '...');
+        return transcription;
+        
+    } catch (error) {
+        console.error('Google Speech transcription failed:', error);
+        throw error;
+    }
+}
+
+async function enhanceTranscriptWithBedrock(transcript, title) {
+    console.log('Enhancing transcript with Bedrock Claude...');
+    
+    try {
+        const prompt = `Tienes esta transcripción de un TikTok titulado "${title}":
+
+${transcript}
+
+Genera un resumen estructurado en español que incluya:
+1. Tema principal
+2. Puntos clave mencionados
+3. Consejos o pasos específicos
+4. Categoría (receta, rutina, consejo, etc.)
+
+Mantén el resumen conciso, máximo 300 palabras.`;
+
+        const body = {
+            anthropic_version: "bedrock-2023-05-31",
+            max_tokens: 400,
+            messages: [
+                {
+                    role: "user",
+                    content: prompt
+                }
+            ]
+        };
+
+        const command = new InvokeModelCommand({
+            modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+            contentType: "application/json",
+            body: JSON.stringify(body)
+        });
+
+        const response = await bedrockClient.send(command);
+        const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+        
+        const enhancement = responseBody.content[0].text;
+        console.log('Transcript enhanced successfully');
+        
+        return `${enhancement}\n\n--- Transcripción completa ---\n${transcript}`;
+        
+    } catch (error) {
+        console.error('Bedrock enhancement failed:', error);
+        // Return just the transcript if enhancement fails
+        return transcript;
     }
 }
 
@@ -106,24 +233,6 @@ async function updateItemStatus(userId, itemId, updates) {
     await dynamoClient.send(new UpdateItemCommand(params));
 }
 
-async function startTranscriptionJob(jobName, mediaKey) {
-    const params = {
-        TranscriptionJobName: jobName,
-        LanguageCode: "es-MX",
-        MediaFormat: "mp3",
-        Media: {
-            MediaFileUri: `s3://${process.env.RAW_MEDIA_BUCKET}/${mediaKey}`
-        },
-        OutputBucketName: process.env.TRANSCRIPTS_BUCKET,
-        OutputKey: `transcriptions/${jobName}/`
-    };
-
-    const command = new StartTranscriptionJobCommand(params);
-    const result = await transcribeClient.send(command);
-    
-    console.log('Started transcription job:', result.TranscriptionJob.TranscriptionJobName);
-    return result;
-}
 
 exports.handler = async (event) => {
     console.log('ProcessTikTok Lambda triggered:', JSON.stringify(event, null, 2));
@@ -139,7 +248,9 @@ exports.handler = async (event) => {
             try {
                 // 1) Download TikTok audio
                 console.log(`Starting TikTok processing for ${sourceUrl}`);
-                const audioBuffer = await downloadTikTokAudio(sourceUrl);
+                const { buffer: audioBuffer, title } = await downloadTikTokAudio(sourceUrl);
+                
+                console.log(`Downloaded TikTok: "${title}"`);
                 
                 // 2) Upload to S3
                 const mediaKey = `${userId}/${itemId}/audio.mp3`;
@@ -152,23 +263,46 @@ exports.handler = async (event) => {
                 
                 console.log(`Uploaded audio to S3: ${mediaKey}`);
                 
-                // 3) Update DynamoDB: status = MEDIA_STORED
+                // 3) Update DynamoDB: status = MEDIA_STORED, save title
                 await updateItemStatus(userId, itemId, {
                     status: "MEDIA_STORED",
-                    mediaS3Key: mediaKey
+                    mediaS3Key: mediaKey,
+                    title: title
                 });
                 
-                // 4) Start Transcribe job
-                const jobName = `mindpocket-${userId}-${itemId}`;
-                await startTranscriptionJob(jobName, mediaKey);
+                // 4) Transcribe audio with Google Speech-to-Text
+                let transcript = null;
+                let transcriptionMethod = 'fallback';
                 
-                // 5) Update DynamoDB: status = TRANSCRIBING, save jobName
+                try {
+                    console.log('Transcribing audio with Google Speech...');
+                    const rawTranscript = await transcribeAudio(audioBuffer);
+                    console.log('Audio transcribed successfully');
+                    
+                    // 5) Enhance transcript with Bedrock Claude
+                    try {
+                        transcript = await enhanceTranscriptWithBedrock(rawTranscript, title);
+                        transcriptionMethod = 'google-speech + bedrock';
+                    } catch (enhanceError) {
+                        console.warn('Transcript enhancement failed:', enhanceError.message);
+                        transcript = rawTranscript;
+                        transcriptionMethod = 'google-speech';
+                    }
+                } catch (transcribeError) {
+                    console.warn('Audio transcription failed:', transcribeError.message);
+                    // Fallback: use title only
+                    transcript = `Contenido de TikTok: ${title}\n\nNo se pudo transcribir el audio automáticamente.`;
+                    transcriptionMethod = 'fallback';
+                }
+                
+                // 6) Update DynamoDB: status = COMPLETED with transcript
                 await updateItemStatus(userId, itemId, {
-                    status: "TRANSCRIBING",
-                    transcriptionJobName: jobName
+                    status: "COMPLETED",
+                    transcript: transcript,
+                    transcriptionMethod: transcriptionMethod
                 });
                 
-                console.log(`Successfully processed ${itemId}: TRANSCRIBING`);
+                console.log(`Successfully processed ${itemId}: COMPLETED`);
                 
             } catch (processingError) {
                 console.error(`Error processing item ${itemId}:`, processingError);

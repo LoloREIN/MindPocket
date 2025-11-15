@@ -380,9 +380,10 @@ resources:
             {
               "Effect": "Allow",
               "Action": [
-                "transcribe:StartTranscriptionJob"
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
               ],
-              "Resource": "*"
+              "Resource": "arn:aws:bedrock:*::foundation-model/*"
             }
           ]
         }
@@ -544,12 +545,15 @@ resources:
       role: ${process-tiktok-lambda-role.arn}
       code:
         fn::fileArchive: ./lambdas/process-tiktok
-      timeout: 60
+      timeout: 300  # 5 minutes for transcription
+      memorySize: 512  # Memory for audio processing
       environment:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
           RAW_MEDIA_BUCKET: ${raw-media-bucket.id}
           TRANSCRIPTS_BUCKET: ${transcripts-bucket.id}
+          GOOGLE_CREDENTIALS_JSON:
+            fn::toJSON: ${google-credentials-json}
 
   transcribe-callback-lambda:
     type: aws:lambda:Function

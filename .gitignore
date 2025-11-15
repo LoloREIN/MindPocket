@@ -221,3 +221,12 @@ Pulumi/.pulumi/
 # Lambdas - Node.js dependencies
 Infra/lambdas/*/node_modules/
 Infra/lambdas/*/package-lock.json
+
+# Google Cloud credentials
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+linen-works-*.json
+*-credentials.json
+google-credentials.json
