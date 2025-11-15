@@ -7,7 +7,7 @@ import { MobileHeader } from '@/components/mobile-header'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, ArrowLeft, ExternalLink, Clock, Tag, Edit, Trash2, Heart } from 'lucide-react'
+import { Loader2, ExternalLink, Clock, Tag, Edit, Trash2, Heart } from 'lucide-react'
 import { StatusBadge } from '@/components/status-badge'
 import { Input } from '@/components/ui/input'
 import {
