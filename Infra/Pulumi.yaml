@@ -70,33 +70,31 @@ resources:
       description: MindPocket wellness app
       repository: https://github.com/LoloREIN/MindPocket
       accessToken: ${amplify:accessToken}
+      platform: WEB_COMPUTE
       buildSpec: |
         version: 1
-        frontend:
-          phases:
-            preBuild:
-              commands:
-                - echo "=== PREBUILD PHASE ==="
-                - echo "Current working directory:" && pwd
-                - echo "Repository contents:" && ls -la
-                - echo "Installing dependencies in Frontend folder"
-                - cd Frontend && if [ -f package-lock.json ]; then npm ci; else npm install --legacy-peer-deps --include=dev; fi
-            build:
-              commands:
-                - echo "=== BUILD PHASE ==="
-                - echo "Current working directory:" && pwd  
-                - echo "Directory contents:" && ls -la
-                - echo "Building Next.js application (already in Frontend folder)"
-                - npm run build
-          artifacts:
-            baseDirectory: Frontend
-            files:
-              - '**/*'
-          cache:
-            paths:
-              - Frontend/node_modules/**/*
-              - Frontend/.next/cache/**/*
+        applications:
+          - appRoot: Frontend
+            frontend:
+              phases:
+                preBuild:
+                  commands:
+                    - echo "Installing dependencies"
+                    - npm ci --legacy-peer-deps
+                build:
+                  commands:
+                    - echo "Building Next.js application"
+                    - npm run build
+              artifacts:
+                baseDirectory: .next
+                files:
+                  - '**/*'
+              cache:
+                paths:
+                  - node_modules/**/*
+                  - .next/cache/**/*
       environmentVariables:
+        _LIVE_PACKAGE_UPDATES: '[{"pkg":"@aws-amplify/cli","type":"npm","version":"latest"}]'
         NODE_ENV: production
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
         NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID: ${mindpocket-user-pool-client.id}
@@ -111,7 +109,7 @@ resources:
       appId: ${mindpocket-app.id}
       branchName: main
       enableAutoBuild: true
-      framework: Next.js - SSR
+      framework: Next.js
 
   # Domain association (optional - commented out for now)
   # domain:
