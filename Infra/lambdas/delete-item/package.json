@@ -1,0 +1,10 @@
+{
+  "name": "delete-item-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to delete wellness items",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0"
+  }
+}
