@@ -31,11 +31,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 
-// Required for static export
-export function generateStaticParams() {
-  return []
-}
-
 export default function ItemDetailPage() {
   const params = useParams()
   const router = useRouter()
