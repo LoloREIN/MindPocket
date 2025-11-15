@@ -110,6 +110,7 @@ resources:
       appId: ${mindpocket-app.id}
       branchName: main
       enableAutoBuild: true
+      framework: "Next.js - SSR"
       stage: PRODUCTION
 
   # Domain association (optional - commented out for now)

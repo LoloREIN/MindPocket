@@ -18,6 +18,11 @@ cp -R .next/standalone/* "$COMPUTE_DIR"/
 mkdir -p "$COMPUTE_DIR/.next"
 cp -R .next/static "$COMPUTE_DIR/.next/" 2>/dev/null || true
 
+# 2b) Expose required-server-files.json at the bundle root for Amplify
+if [ -f .next/required-server-files.json ]; then
+  cp .next/required-server-files.json "$OUT_DIR/required-server-files.json"
+fi
+
 # 3) Create minimal deploy-manifest.json with a catch-all route to compute
 cat > "$OUT_DIR/deploy-manifest.json" << 'EOF'
 {
