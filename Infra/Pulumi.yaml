@@ -80,7 +80,7 @@ resources:
                 preBuild:
                   commands:
                     - echo "Installing dependencies"
-                    - npm ci --legacy-peer-deps
+                    - npm install --legacy-peer-deps
                 build:
                   commands:
                     - echo "Building Next.js application"
