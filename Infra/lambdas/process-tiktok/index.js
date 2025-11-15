@@ -501,7 +501,9 @@ exports.handler = async (event) => {
                 const updates = {
                     status: "READY",
                     type: enrichedContent.type,
-                    transcript: rawTranscript,
+                    title: title,  // Add title from TikTok
+                    transcriptFull: rawTranscript,  // Full transcript
+                    transcriptPreview: rawTranscript.substring(0, 200),  // Preview for list view
                     tags: enrichedContent.tags || []
                 };
                 

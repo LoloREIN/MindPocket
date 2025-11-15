@@ -76,6 +76,7 @@ exports.handler = async (event) => {
             status: result.Item?.status?.S,
             type: result.Item?.type?.S,
             title: result.Item?.title?.S,
+            notes: result.Item?.notes?.S,  // Optional notes/tips for UI
             tags: result.Item?.tags?.S ? JSON.parse(result.Item.tags.S) : [],
             transcriptPreview: result.Item?.transcriptPreview?.S,
             transcriptFull: result.Item?.transcriptFull?.S,
