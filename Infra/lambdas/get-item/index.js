@@ -2,6 +2,30 @@ const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 
+// Helper function to convert DynamoDB format to JavaScript values
+function fromDynamoDBValue(value) {
+    if (!value) return null;
+    
+    if (value.S !== undefined) return value.S;
+    if (value.N !== undefined) return Number(value.N);
+    if (value.BOOL !== undefined) return value.BOOL;
+    if (value.NULL !== undefined) return null;
+    
+    if (value.L !== undefined) {
+        return value.L.map(item => fromDynamoDBValue(item));
+    }
+    
+    if (value.M !== undefined) {
+        const obj = {};
+        for (const [k, v] of Object.entries(value.M)) {
+            obj[k] = fromDynamoDBValue(v);
+        }
+        return obj;
+    }
+    
+    return null;
+}
+
 exports.handler = async (event) => {
     console.log('GetItem Lambda triggered:', JSON.stringify(event, null, 2));
     
@@ -77,12 +101,13 @@ exports.handler = async (event) => {
             type: result.Item?.type?.S,
             title: result.Item?.title?.S,
             notes: result.Item?.notes?.S,  // Optional notes/tips for UI
-            tags: result.Item?.tags?.S ? JSON.parse(result.Item.tags.S) : [],
+            tags: fromDynamoDBValue(result.Item?.tags) || [],
             transcriptPreview: result.Item?.transcriptPreview?.S,
             transcriptFull: result.Item?.transcriptFull?.S,
+            transcript: result.Item?.transcriptFull?.S,  // Alias for frontend compatibility
             transcriptConfidence: result.Item?.transcriptConfidence?.S,
             transcriptS3Key: result.Item?.transcriptS3Key?.S,
-            enrichedData: result.Item?.enrichedData?.S ? JSON.parse(result.Item.enrichedData.S) : null,
+            enrichedData: fromDynamoDBValue(result.Item?.enrichedData),
             mediaS3Key: result.Item?.mediaS3Key?.S,
             transcriptionJobName: result.Item?.transcriptionJobName?.S,
             errorMessage: result.Item?.errorMessage?.S,
