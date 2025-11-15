@@ -53,10 +53,13 @@ const formatDate = (dateString: string) => {
 }
 
 export default function LibraryPage() {
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+  const initialFilter = searchParams.get('filter') || 'all'
+  
   const [items, setItems] = useState<WellnessItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedFilter, setSelectedFilter] = useState<ItemType | 'all'>('all')
+  const [selectedFilter, setSelectedFilter] = useState<ItemType | 'all' | 'processing'>(initialFilter as any)
 
   useEffect(() => {
     fetchItems()
@@ -78,6 +81,12 @@ export default function LibraryPage() {
 
   const filteredItems = items.filter(item => {
     if (selectedFilter === 'all') return true
+    if (selectedFilter === 'processing') {
+      return item.status === 'PENDING_DOWNLOAD' || 
+             item.status === 'MEDIA_STORED' || 
+             item.status === 'TRANSCRIBING' || 
+             item.status === 'ENRICHING'
+    }
     return item.type === selectedFilter
   })
 
@@ -136,6 +145,15 @@ export default function LibraryPage() {
             onClick={() => setSelectedFilter('all')}
           >
             Todos
+          </Button>
+          <Button
+            variant={selectedFilter === 'processing' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSelectedFilter('processing')}
+            className="gap-1"
+          >
+            <Loader2 className="h-3 w-3" />
+            En proceso
           </Button>
           <Button
             variant={selectedFilter === 'recipe' ? 'default' : 'outline'}
