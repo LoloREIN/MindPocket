@@ -26,6 +26,7 @@ export interface WellnessItem {
   updatedAt: string;
   transcript?: string;
   transcriptPreview?: string;
+  isFavorite?: boolean;
   enrichedData?: {
     recipe?: {
       name: string;
@@ -165,14 +166,26 @@ class ApiClient {
     return this.request<WellnessItem>(`/items/${itemId}`);
   }
 
-  // Future: PATCH /items/{itemId}
+  // PUT /items/{itemId}
   async updateItem(
     itemId: string,
-    updates: Partial<Pick<WellnessItem, 'title' | 'tags' | 'enrichedData'>>
-  ): Promise<WellnessItem> {
-    return this.request<WellnessItem>(`/items/${itemId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
+    updates: {
+      title?: string;
+      tags?: string[];
+      type?: ItemType;
+      isFavorite?: boolean;
+    }
+  ): Promise<void> {
+    await this.request<{ message: string; item: any }>(`/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ itemId, ...updates }),
+    });
+  }
+
+  // DELETE /items/{itemId}
+  async deleteItem(itemId: string): Promise<void> {
+    await this.request<{ message: string; itemId: string }>(`/items/${itemId}`, {
+      method: 'DELETE',
     });
   }
 

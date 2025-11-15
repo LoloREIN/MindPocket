@@ -4,7 +4,8 @@ import { MobileHeader } from '@/components/mobile-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { UtensilsCrossed, Dumbbell, Bookmark, Sparkles, Clock, Loader2, Package } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { UtensilsCrossed, Dumbbell, Bookmark, Sparkles, Clock, Loader2, Package, Search } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { apiClient, type WellnessItem, type ItemType } from '@/lib/api-client'
 import Link from 'next/link'
@@ -60,6 +61,7 @@ export default function LibraryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedFilter, setSelectedFilter] = useState<ItemType | 'all' | 'processing'>(initialFilter as any)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     fetchItems()
@@ -80,14 +82,31 @@ export default function LibraryPage() {
   }
 
   const filteredItems = items.filter(item => {
-    if (selectedFilter === 'all') return true
-    if (selectedFilter === 'processing') {
-      return item.status === 'PENDING_DOWNLOAD' || 
-             item.status === 'MEDIA_STORED' || 
-             item.status === 'TRANSCRIBING' || 
-             item.status === 'ENRICHING'
+    // Filter by type/status
+    let matchesFilter = true
+    if (selectedFilter !== 'all') {
+      if (selectedFilter === 'processing') {
+        matchesFilter = item.status === 'PENDING_DOWNLOAD' || 
+                       item.status === 'MEDIA_STORED' || 
+                       item.status === 'TRANSCRIBING' || 
+                       item.status === 'ENRICHING'
+      } else {
+        matchesFilter = item.type === selectedFilter
+      }
     }
-    return item.type === selectedFilter
+    
+    // Filter by search query
+    let matchesSearch = true
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      matchesSearch = Boolean(
+        item.title?.toLowerCase().includes(query) ||
+        item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        item.transcript?.toLowerCase().includes(query)
+      )
+    }
+    
+    return matchesFilter && matchesSearch
   })
 
   if (isLoading) {
@@ -137,6 +156,17 @@ export default function LibraryPage() {
       <MobileHeader title="Biblioteca" onItemAdded={fetchItems} />
       
       <div className="p-4 space-y-4">
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por título, tags o contenido..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 glass-card"
+          />
+        </div>
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
           <Button
