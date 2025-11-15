@@ -9,6 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Loader2, ArrowLeft, ExternalLink, Clock, Tag } from 'lucide-react'
 import { StatusBadge } from '@/components/status-badge'
+
+// Required for static export
+export function generateStaticParams() {
+  return []
+}
+
 export default function ItemDetailPage() {
   const params = useParams()
   const router = useRouter()
