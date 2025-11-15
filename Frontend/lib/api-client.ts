@@ -7,6 +7,7 @@ export type ItemStatus =
   | 'MEDIA_STORED' 
   | 'TRANSCRIBING' 
   | 'ENRICHING' 
+  | 'COMPLETED'
   | 'READY' 
   | 'ERROR' 
   | 'ENRICH_ERROR';
