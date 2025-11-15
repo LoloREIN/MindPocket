@@ -31,10 +31,11 @@ else
 fi
 
 # 2c) Copy server trace files expected by Amplify into the bundle
+# Amplify expects trace files inside compute/default/.next/ alongside static/
 if [ -f .next/trace ]; then
   echo "✓ Copying trace files (trace)"
   cp .next/trace "$OUT_DIR/trace"
-  cp .next/trace "$COMPUTE_DIR/trace"
+  cp .next/trace "$COMPUTE_DIR/.next/trace"
 else
   echo "⚠️  .next/trace not found"
 fi
@@ -42,7 +43,7 @@ fi
 if [ -f .next/trace-build ]; then
   echo "✓ Copying trace files (trace-build)"
   cp .next/trace-build "$OUT_DIR/trace-build"
-  cp .next/trace-build "$COMPUTE_DIR/trace-build"
+  cp .next/trace-build "$COMPUTE_DIR/.next/trace-build"
 else
   echo "⚠️  .next/trace-build not found"
 fi

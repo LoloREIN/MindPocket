@@ -8,6 +8,8 @@ import { AmplifyProvider } from '@/lib/amplify-provider'
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'MindPocket - Your Wellness Collection',
   description: 'Save and organize wellness content from TikTok: recipes, routines, and more',
