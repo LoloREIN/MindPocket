@@ -128,30 +128,34 @@ async function transcribeAudio(audioBuffer, s3Key) {
             throw new Error('Google Speech client not initialized');
         }
         
-        // Check audio size - Google Speech API limits
+        // Check audio size
         const audioSizeMB = audioBuffer.length / (1024 * 1024);
-        const estimatedDurationSeconds = audioSizeMB * 60; // Rough estimate: ~1MB per minute for MP3
+        const estimatedDurationMinutes = audioSizeMB / 1; // ~1MB per minute for MP3
         
         console.log('Audio analysis:', {
             sizeBytes: audioBuffer.length,
             sizeMB: audioSizeMB.toFixed(2),
-            estimatedDuration: `${estimatedDurationSeconds.toFixed(0)}s`
+            estimatedDuration: `${estimatedDurationMinutes.toFixed(1)} min`
         });
 
-        // Google Speech API sync recognition limit: 60 seconds
-        // For short videos (< 2MB ≈ 120 seconds), try full audio
-        // For longer videos, we'll use the title/description instead
+        // Google Speech API sync recognition limit: 60 seconds (~1MB for MP3)
+        // Strategy: For large files, extract first 60 seconds to capture key content
         
-        const TWO_MB = 2 * 1024 * 1024;
-        if (audioBuffer.length > TWO_MB) {
-            console.log(`⚠️ Audio too large (${audioSizeMB.toFixed(2)}MB). Will use title/description instead.`);
-            throw new Error('AUDIO_TOO_LARGE'); // Special error code
+        const ONE_MB = 1 * 1024 * 1024;
+        let audioToTranscribe = audioBuffer;
+        let isPartialTranscription = false;
+        
+        if (audioBuffer.length > ONE_MB) {
+            console.log(`⚠️ Audio large (${audioSizeMB.toFixed(2)}MB). Extracting first ~60 seconds...`);
+            // Extract first 1MB (approximately 60 seconds of MP3 audio)
+            audioToTranscribe = audioBuffer.slice(0, ONE_MB);
+            isPartialTranscription = true;
+            console.log(`📏 Using first ${(audioToTranscribe.length / (1024 * 1024)).toFixed(2)}MB for transcription`);
         }
         
-        const audioBytes = audioBuffer.toString('base64');
+        const audioBytes = audioToTranscribe.toString('base64');
 
-        // Configure request for multi-language audio (Spanish + English)
-        // TikTok audio is typically MP3 format
+        // Configure request for Spanish audio with English fallback
         const request = {
             audio: {
                 content: audioBytes,
@@ -159,7 +163,7 @@ async function transcribeAudio(audioBuffer, s3Key) {
             config: {
                 encoding: 'MP3',
                 languageCode: 'es-MX',  // Primary language
-                alternativeLanguageCodes: ['en-US', 'es-ES', 'en-GB'],  // English + Spanish alternatives
+                alternativeLanguageCodes: ['en-US', 'es-ES'],  // Fallback languages
                 enableAutomaticPunctuation: true,
                 model: 'latest_long',  // Better for longer audio (handles music better)
                 enableWordTimeOffsets: false,
@@ -169,50 +173,37 @@ async function transcribeAudio(audioBuffer, s3Key) {
             },
         };
 
-        console.log('Sending audio to Google Speech API...', {
-            audioSize: audioBuffer.length,
-            encoding: request.config.encoding,
-            language: request.config.languageCode
-        });
+        console.log('🎙️ Sending audio to Google Speech API...');
         const [response] = await speechClient.recognize(request);
         
-        console.log('Google Speech API response:', {
+        console.log('✅ Google Speech API response received:', {
             hasResults: !!response.results,
             resultCount: response.results?.length || 0,
             totalBilledTime: response.totalBilledTime
         });
         
         if (!response.results || response.results.length === 0) {
-            throw new Error('No transcription results returned - audio may contain no speech or be too short');
+            throw new Error('No transcription results - audio may contain no speech or only music');
         }
         
-        // Debug: log first result structure
-        if (response.results.length > 0) {
-            console.log('First result sample:', JSON.stringify({
-                hasAlternatives: !!response.results[0].alternatives,
-                alternativesCount: response.results[0].alternatives?.length || 0,
-                firstAltTranscript: response.results[0].alternatives?.[0]?.transcript || 'EMPTY',
-                firstAltConfidence: response.results[0].alternatives?.[0]?.confidence,
-                isFinal: response.results[0].isFinal
-            }));
-        }
-        
+        // Extract transcription from all results
         const transcription = response.results
             .map(result => result.alternatives?.[0]?.transcript || '')
             .filter(text => text.length > 0)
-            .join('\n');
+            .join(' ');
 
         if (!transcription || transcription.trim().length === 0) {
-            console.error('All results are empty. Sample results:', 
-                response.results.slice(0, 3).map((r, i) => ({
-                    index: i,
-                    alternatives: r.alternatives?.map(a => ({ transcript: a.transcript, confidence: a.confidence }))
-                }))
-            );
-            throw new Error('Empty transcription result - audio may contain only music or unintelligible speech');
+            throw new Error('Empty transcription - audio may contain only music or unintelligible speech');
         }
 
-        console.log('Transcription successful:', transcription.substring(0, 100) + '...');
+        console.log('✅ Transcription successful:', transcription.substring(0, 100) + '...');
+        console.log(`📊 Total transcribed text length: ${transcription.length} characters`);
+        
+        // Add note if partial transcription was used
+        if (isPartialTranscription) {
+            return `[Transcripción parcial - primeros ~60 segundos]\n\n${transcription}`;
+        }
+        
         return transcription;
         
     } catch (error) {
@@ -268,13 +259,13 @@ IMPORTANTE:
 - Si no es receta/workout/pending, usa type: "other" y omite enrichedData
 - Extrae solo la información que esté explícita en la transcripción`;
 
-        const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-haiku-20241022-v1:0';
+        const modelId = process.env.BEDROCK_MODEL_ID || 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
         
         // Use different request format based on model type
         let body, aiResponse;
         
-        if (modelId.startsWith('anthropic')) {
-            // Claude format
+        if (modelId.includes('anthropic')) {
+            // Claude format (inference profile: us.anthropic.* or direct: anthropic.*)
             body = {
                 anthropic_version: "bedrock-2023-05-31",
                 max_tokens: 1500,
@@ -302,7 +293,7 @@ IMPORTANTE:
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         
         // Extract response based on model type
-        if (modelId.startsWith('anthropic')) {
+        if (modelId.includes('anthropic')) {
             aiResponse = responseBody.content[0].text;
         } else if (modelId.startsWith('amazon.titan')) {
             aiResponse = responseBody.results[0].outputText;
@@ -467,27 +458,16 @@ exports.handler = async (event) => {
                 } catch (transcribeError) {
                     console.warn('Audio transcription failed:', transcribeError.message);
                     
-                    // Special handling: if video is too long, use title/description
-                    if (transcribeError.message === 'AUDIO_TOO_LARGE') {
-                        console.log('📝 Using title/description for classification since video is long...');
-                        rawTranscript = `📱 TikTok (video largo - usando descripción):\n\n${title}`;
-                        
-                        // Try to classify using the title/description
-                        try {
-                            enrichedContent = await classifyAndEnrichContent(title, title);
-                            console.log('✅ Content classified successfully using title');
-                        } catch (enrichError) {
-                            console.warn('Classification from title failed:', enrichError.message);
-                            enrichedContent = {
-                                type: 'other',
-                                summary: title,
-                                tags: ['tiktok', 'video-largo'],
-                                enrichedData: null
-                            };
-                        }
-                    } else {
-                        // Other transcription errors: use fallback
-                        rawTranscript = `📱 TikTok: ${title}\n\n⚠️ La transcripción automática no está disponible.\nPosibles razones: el audio solo contiene música, habla poco clara, o audio muy corto.\n\nEl contenido multimedia está guardado y disponible.`;
+                    // Fallback: use title/description for classification
+                    console.log('📝 Using title/description as fallback...');
+                    rawTranscript = `📱 TikTok: ${title}\n\n⚠️ La transcripción automática no está disponible.\nPosibles razones: el audio solo contiene música, habla poco clara, o no hay voz en el contenido.\n\nEl contenido multimedia está guardado y disponible.`;
+                    
+                    // Try to classify using the title
+                    try {
+                        enrichedContent = await classifyAndEnrichContent(title, title);
+                        console.log('✅ Content classified successfully using title');
+                    } catch (enrichError) {
+                        console.warn('Classification from title failed:', enrichError.message);
                         enrichedContent = {
                             type: 'other',
                             summary: title,
