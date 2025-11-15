@@ -268,7 +268,7 @@ IMPORTANTE:
 - Si no es receta/workout/pending, usa type: "other" y omite enrichedData
 - Extrae solo la información que esté explícita en la transcripción`;
 
-        const modelId = process.env.BEDROCK_MODEL_ID || 'amazon.titan-text-express-v1';
+        const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-haiku-20241022-v1:0';
         
         // Use different request format based on model type
         let body, aiResponse;

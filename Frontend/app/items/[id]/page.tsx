@@ -7,9 +7,10 @@ import { MobileHeader } from '@/components/mobile-header'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, ExternalLink, Clock, Tag, Edit, Trash2, Heart } from 'lucide-react'
+import { Loader2, ExternalLink, Clock, Tag, Edit, Trash2, Heart, ChefHat, Dumbbell, CheckCircle2 } from 'lucide-react'
 import { StatusBadge } from '@/components/status-badge'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,9 @@ export default function ItemDetailPage() {
   
   // Favorite
   const [isFavorite, setIsFavorite] = useState(false)
+  
+  // Checklist for ingredients/exercises
+  const [checkedItems, setCheckedItems] = useState<number[]>([])
 
   useEffect(() => {
     fetchItem()
@@ -115,6 +119,213 @@ export default function ItemDetailPage() {
     }
   }
 
+  const toggleCheckedItem = (index: number) => {
+    setCheckedItems(prev =>
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    )
+  }
+
+  // Render functions for different content types
+  const renderRecipeContent = () => {
+    const recipe = item?.enrichedData?.recipe
+    if (!recipe) return null
+
+    return (
+      <div className="space-y-4">
+        {/* Recipe Info */}
+        {(recipe.time_minutes || recipe.servings || recipe.difficulty) && (
+          <div className="grid grid-cols-3 gap-3">
+            {recipe.time_minutes && (
+              <Card className="glass-card p-3">
+                <div className="text-center">
+                  <Clock className="h-5 w-5 mx-auto mb-1 text-primary" />
+                  <p className="text-xs text-muted-foreground">Tiempo</p>
+                  <p className="text-sm font-semibold">{recipe.time_minutes} min</p>
+                </div>
+              </Card>
+            )}
+            {recipe.servings && (
+              <Card className="glass-card p-3">
+                <div className="text-center">
+                  <ChefHat className="h-5 w-5 mx-auto mb-1 text-primary" />
+                  <p className="text-xs text-muted-foreground">Porciones</p>
+                  <p className="text-sm font-semibold">{recipe.servings}</p>
+                </div>
+              </Card>
+            )}
+            {recipe.difficulty && (
+              <Card className="glass-card p-3">
+                <div className="text-center">
+                  <Badge variant="secondary" className="text-xs">{recipe.difficulty}</Badge>
+                  <p className="text-xs text-muted-foreground mt-1">Dificultad</p>
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Ingredients */}
+        {recipe.ingredients && recipe.ingredients.length > 0 && (
+          <Card className="glass-card p-5">
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <ChefHat className="h-5 w-5" />
+              Ingredientes
+            </h2>
+            <div className="space-y-3">
+              {recipe.ingredients.map((ingredient, index) => (
+                <div key={index} className="flex items-center gap-3">
+                  <Checkbox
+                    id={`ingredient-${index}`}
+                    checked={checkedItems.includes(index)}
+                    onCheckedChange={() => toggleCheckedItem(index)}
+                  />
+                  <label
+                    htmlFor={`ingredient-${index}`}
+                    className={`text-sm cursor-pointer transition-colors ${
+                      checkedItems.includes(index)
+                        ? 'text-muted-foreground line-through'
+                        : 'text-foreground'
+                    }`}
+                  >
+                    {ingredient.quantity ? `${ingredient.quantity} ` : ''}{ingredient.item}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Steps */}
+        {recipe.steps && recipe.steps.length > 0 && (
+          <Card className="glass-card p-5">
+            <h2 className="text-lg font-semibold mb-3">Preparación</h2>
+            <ol className="space-y-3">
+              {recipe.steps.map((step, index) => (
+                <li key={index} className="flex gap-3">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                    {index + 1}
+                  </div>
+                  <p className="text-sm text-foreground leading-relaxed">{step}</p>
+                </li>
+              ))}
+            </ol>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  const renderWorkoutContent = () => {
+    const workout = item?.enrichedData?.workout
+    if (!workout) return null
+
+    return (
+      <div className="space-y-4">
+        {/* Workout Info */}
+        {(workout.duration_minutes || workout.level || workout.focus) && (
+          <div className="grid grid-cols-3 gap-3">
+            {workout.duration_minutes && (
+              <Card className="glass-card p-3">
+                <div className="text-center">
+                  <Clock className="h-5 w-5 mx-auto mb-1 text-success" />
+                  <p className="text-xs text-muted-foreground">Duración</p>
+                  <p className="text-sm font-semibold">{workout.duration_minutes} min</p>
+                </div>
+              </Card>
+            )}
+            {workout.level && (
+              <Card className="glass-card p-3">
+                <div className="text-center">
+                  <Dumbbell className="h-5 w-5 mx-auto mb-1 text-success" />
+                  <p className="text-xs text-muted-foreground">Nivel</p>
+                  <p className="text-sm font-semibold">{workout.level}</p>
+                </div>
+              </Card>
+            )}
+            {workout.focus && workout.focus.length > 0 && (
+              <Card className="glass-card p-3">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Enfoque</p>
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {workout.focus.slice(0, 2).map((f, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">{f}</Badge>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Exercises */}
+        {workout.blocks && workout.blocks.length > 0 && (
+          <Card className="glass-card p-5">
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Dumbbell className="h-5 w-5" />
+              Ejercicios
+            </h2>
+            <div className="space-y-3">
+              {workout.blocks.map((block, index) => (
+                <div key={index} className="flex gap-3 p-3 rounded-lg glass-card">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success/10 text-xs font-semibold text-success">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="font-semibold text-sm">{block.exercise}</h3>
+                      {block.reps && (
+                        <Badge variant="secondary" className="text-xs shrink-0">
+                          {block.reps}
+                        </Badge>
+                      )}
+                    </div>
+                    {block.notes && (
+                      <p className="text-xs text-muted-foreground">{block.notes}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  const renderPendingContent = () => {
+    const pending = item?.enrichedData?.pending
+    if (!pending) return null
+
+    const getCategoryIcon = () => {
+      switch (pending.category) {
+        case 'movie': return '🎬'
+        case 'book': return '📚'
+        case 'course': return '🎓'
+        default: return '📌'
+      }
+    }
+
+    return (
+      <Card className="glass-card p-5">
+        <div className="flex items-start gap-4">
+          <div className="text-4xl">{getCategoryIcon()}</div>
+          <div className="flex-1">
+            <Badge variant="outline" className="mb-2 capitalize">{pending.category}</Badge>
+            <h2 className="text-xl font-bold mb-2">{pending.name}</h2>
+            {pending.platform && (
+              <p className="text-sm text-muted-foreground mb-2">
+                Plataforma: <span className="font-medium">{pending.platform}</span>
+              </p>
+            )}
+            {pending.notes && (
+              <p className="text-sm text-muted-foreground">{pending.notes}</p>
+            )}
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen">
@@ -142,7 +353,7 @@ export default function ItemDetailPage() {
     )
   }
 
-  // Default view for 'other' or items without enriched data
+  // Render view based on item type and enriched data
   return (
     <div className="min-h-screen pb-20">
       <MobileHeader title="Detalle" />
@@ -244,7 +455,12 @@ export default function ItemDetailPage() {
           )}
         </Card>
 
-        {/* Transcript */}
+        {/* Enriched Content - Render based on type */}
+        {item.type === 'recipe' && item.enrichedData?.recipe && renderRecipeContent()}
+        {item.type === 'workout' && item.enrichedData?.workout && renderWorkoutContent()}
+        {item.type === 'pending' && item.enrichedData?.pending && renderPendingContent()}
+
+        {/* Transcript - Show for all types */}
         {item.transcript && (
           <Card className="glass-card p-5">
             <h2 className="text-lg font-semibold mb-3">Transcripción</h2>
