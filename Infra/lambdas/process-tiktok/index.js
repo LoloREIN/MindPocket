@@ -22,24 +22,32 @@ if (process.env.GOOGLE_CREDENTIALS_JSON) {
     console.warn('⚠️ GOOGLE_CREDENTIALS_JSON not set');
 }
 
-async function downloadTikTokAudio(url) {
+async function downloadTikTokAudio(url, retries = 3) {
     console.log('Downloading TikTok audio from:', url);
     
-    try {
-        // Use tikwm.com API - more reliable and no rate limits
-        const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`;
-        
-        console.log('Calling tikwm API:', apiUrl);
-        const response = await fetch(apiUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json'
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            // Use tikwm.com API - more reliable and no rate limits
+            const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`;
+            
+            console.log(`Calling tikwm API (attempt ${attempt}/${retries}):`, apiUrl);
+            const response = await fetch(apiUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                // If 5xx error and we have retries left, try again
+                if (response.status >= 500 && attempt < retries) {
+                    const delay = attempt * 2000; // 2s, 4s exponential backoff
+                    console.log(`⚠️ API returned ${response.status}, retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
             }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-        }
         
         const result = await response.json();
         console.log('API response code:', result.code);
@@ -59,18 +67,19 @@ async function downloadTikTokAudio(url) {
         console.log('TikTok title:', title);
         
         // Try to get audio/video URL
-        // Priority: music > hdplay > play
+        // Priority: hdplay > play > music
+        // We prefer video (with voice + music) over just background music
         let audioUrl = null;
         
-        if (data.music) {
-            audioUrl = data.music;
-            console.log('Using music URL');
-        } else if (data.hdplay) {
+        if (data.hdplay) {
             audioUrl = data.hdplay;
-            console.log('Using HD video URL');
+            console.log('Using HD video URL (contains voice + music)');
         } else if (data.play) {
             audioUrl = data.play;
-            console.log('Using standard video URL');
+            console.log('Using standard video URL (contains voice + music)');
+        } else if (data.music) {
+            audioUrl = data.music;
+            console.log('Using music URL (background music only - no voice expected)');
         }
         
         if (!audioUrl) {
@@ -97,13 +106,21 @@ async function downloadTikTokAudio(url) {
         console.log('Downloaded media buffer size:', buffer.length, 'bytes');
         return { buffer, title };
         
-    } catch (error) {
-        console.error('Error downloading TikTok audio:', error);
-        throw new Error(`TikTok download failed: ${error.message}`);
+        } catch (error) {
+            // If this is the last attempt, throw the error
+            if (attempt === retries) {
+                console.error('Error downloading TikTok audio after all retries:', error);
+                throw new Error(`TikTok download failed: ${error.message}`);
+            }
+            // Otherwise, retry
+            const delay = attempt * 2000;
+            console.log(`⚠️ Error on attempt ${attempt}, retrying in ${delay}ms:`, error.message);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
 }
 
-async function transcribeAudio(audioBuffer) {
+async function transcribeAudio(audioBuffer, s3Key) {
     console.log('Starting audio transcription with Google Speech-to-Text...');
     
     try {
@@ -111,37 +128,88 @@ async function transcribeAudio(audioBuffer) {
             throw new Error('Google Speech client not initialized');
         }
         
-        // Convert audio buffer to base64
+        // Check audio size - Google Speech API limits
+        const audioSizeMB = audioBuffer.length / (1024 * 1024);
+        const estimatedDurationSeconds = audioSizeMB * 60; // Rough estimate: ~1MB per minute for MP3
+        
+        console.log('Audio analysis:', {
+            sizeBytes: audioBuffer.length,
+            sizeMB: audioSizeMB.toFixed(2),
+            estimatedDuration: `${estimatedDurationSeconds.toFixed(0)}s`
+        });
+
+        // Google Speech API sync recognition limit: 60 seconds
+        // For short videos (< 2MB ≈ 120 seconds), try full audio
+        // For longer videos, we'll use the title/description instead
+        
+        const TWO_MB = 2 * 1024 * 1024;
+        if (audioBuffer.length > TWO_MB) {
+            console.log(`⚠️ Audio too large (${audioSizeMB.toFixed(2)}MB). Will use title/description instead.`);
+            throw new Error('AUDIO_TOO_LARGE'); // Special error code
+        }
+        
         const audioBytes = audioBuffer.toString('base64');
 
-        // Configure request for Spanish audio
+        // Configure request for multi-language audio (Spanish + English)
+        // TikTok audio is typically MP3 format
         const request = {
             audio: {
                 content: audioBytes,
             },
             config: {
                 encoding: 'MP3',
-                sampleRateHertz: 16000,
-                languageCode: 'es-MX',
-                alternativeLanguageCodes: ['es-ES', 'es-US'],
+                languageCode: 'es-MX',  // Primary language
+                alternativeLanguageCodes: ['en-US', 'es-ES', 'en-GB'],  // English + Spanish alternatives
                 enableAutomaticPunctuation: true,
-                model: 'default',
+                model: 'latest_long',  // Better for longer audio (handles music better)
+                enableWordTimeOffsets: false,
+                enableWordConfidence: false,
+                maxAlternatives: 1,
+                profanityFilter: false,
             },
         };
 
-        console.log('Sending audio to Google Speech API...');
+        console.log('Sending audio to Google Speech API...', {
+            audioSize: audioBuffer.length,
+            encoding: request.config.encoding,
+            language: request.config.languageCode
+        });
         const [response] = await speechClient.recognize(request);
         
+        console.log('Google Speech API response:', {
+            hasResults: !!response.results,
+            resultCount: response.results?.length || 0,
+            totalBilledTime: response.totalBilledTime
+        });
+        
         if (!response.results || response.results.length === 0) {
-            throw new Error('No transcription results returned');
+            throw new Error('No transcription results returned - audio may contain no speech or be too short');
+        }
+        
+        // Debug: log first result structure
+        if (response.results.length > 0) {
+            console.log('First result sample:', JSON.stringify({
+                hasAlternatives: !!response.results[0].alternatives,
+                alternativesCount: response.results[0].alternatives?.length || 0,
+                firstAltTranscript: response.results[0].alternatives?.[0]?.transcript || 'EMPTY',
+                firstAltConfidence: response.results[0].alternatives?.[0]?.confidence,
+                isFinal: response.results[0].isFinal
+            }));
         }
         
         const transcription = response.results
-            .map(result => result.alternatives[0].transcript)
+            .map(result => result.alternatives?.[0]?.transcript || '')
+            .filter(text => text.length > 0)
             .join('\n');
 
         if (!transcription || transcription.trim().length === 0) {
-            throw new Error('Empty transcription result');
+            console.error('All results are empty. Sample results:', 
+                response.results.slice(0, 3).map((r, i) => ({
+                    index: i,
+                    alternatives: r.alternatives?.map(a => ({ transcript: a.transcript, confidence: a.confidence }))
+                }))
+            );
+            throw new Error('Empty transcription result - audio may contain only music or unintelligible speech');
         }
 
         console.log('Transcription successful:', transcription.substring(0, 100) + '...');
@@ -154,7 +222,7 @@ async function transcribeAudio(audioBuffer) {
 }
 
 async function classifyAndEnrichContent(transcript, title) {
-    console.log('Classifying and enriching content with Bedrock Claude...');
+    console.log('Classifying and enriching content with Bedrock...');
     
     try {
         const prompt = `Analiza esta transcripción de un TikTok titulado "${title}":
@@ -200,19 +268,32 @@ IMPORTANTE:
 - Si no es receta/workout/pending, usa type: "other" y omite enrichedData
 - Extrae solo la información que esté explícita en la transcripción`;
 
-        const body = {
-            anthropic_version: "bedrock-2023-05-31",
-            max_tokens: 1500,
-            messages: [
-                {
-                    role: "user",
-                    content: prompt
+        const modelId = process.env.BEDROCK_MODEL_ID || 'amazon.titan-text-express-v1';
+        
+        // Use different request format based on model type
+        let body, aiResponse;
+        
+        if (modelId.startsWith('anthropic')) {
+            // Claude format
+            body = {
+                anthropic_version: "bedrock-2023-05-31",
+                max_tokens: 1500,
+                messages: [{ role: "user", content: prompt }]
+            };
+        } else if (modelId.startsWith('amazon.titan')) {
+            // Titan format
+            body = {
+                inputText: prompt,
+                textGenerationConfig: {
+                    maxTokenCount: 1500,
+                    temperature: 0.7,
+                    topP: 0.9
                 }
-            ]
-        };
+            };
+        }
 
         const command = new InvokeModelCommand({
-            modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+            modelId: modelId,
             contentType: "application/json",
             body: JSON.stringify(body)
         });
@@ -220,7 +301,13 @@ IMPORTANTE:
         const response = await bedrockClient.send(command);
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         
-        const aiResponse = responseBody.content[0].text;
+        // Extract response based on model type
+        if (modelId.startsWith('anthropic')) {
+            aiResponse = responseBody.content[0].text;
+        } else if (modelId.startsWith('amazon.titan')) {
+            aiResponse = responseBody.results[0].outputText;
+        }
+        
         console.log('AI Response:', aiResponse.substring(0, 200) + '...');
         
         // Parse JSON response
@@ -246,6 +333,45 @@ IMPORTANTE:
     }
 }
 
+// Helper function to convert JavaScript values to DynamoDB format
+function toDynamoDBValue(value) {
+    if (value === null || value === undefined) {
+        return { NULL: true };
+    }
+    
+    if (typeof value === 'string') {
+        return { S: value };
+    }
+    
+    if (typeof value === 'number') {
+        return { N: String(value) };
+    }
+    
+    if (typeof value === 'boolean') {
+        return { BOOL: value };
+    }
+    
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            return { L: [] };
+        }
+        // Convert array elements
+        return { L: value.map(item => toDynamoDBValue(item)) };
+    }
+    
+    if (typeof value === 'object') {
+        // Convert object to Map
+        const map = {};
+        for (const [k, v] of Object.entries(value)) {
+            map[k] = toDynamoDBValue(v);
+        }
+        return { M: map };
+    }
+    
+    // Fallback to string for unknown types
+    return { S: String(value) };
+}
+
 async function updateItemStatus(userId, itemId, updates) {
     const updateExpression = [];
     const expressionAttributeNames = {};
@@ -260,7 +386,7 @@ async function updateItemStatus(userId, itemId, updates) {
         const attrValue = `:val${index}`;
         
         expressionAttributeNames[attrName] = key;
-        expressionAttributeValues[attrValue] = { S: updates[key] };
+        expressionAttributeValues[attrValue] = toDynamoDBValue(updates[key]);
         updateExpression.push(`${attrName} = ${attrValue}`);
     });
 
@@ -321,7 +447,7 @@ exports.handler = async (event) => {
                 
                 try {
                     console.log('Transcribing audio with Google Speech...');
-                    rawTranscript = await transcribeAudio(audioBuffer);
+                    rawTranscript = await transcribeAudio(audioBuffer, mediaKey);
                     console.log('Audio transcribed successfully');
                     
                     // 5) Classify and enrich content with Bedrock Claude
@@ -340,21 +466,44 @@ exports.handler = async (event) => {
                     }
                 } catch (transcribeError) {
                     console.warn('Audio transcription failed:', transcribeError.message);
-                    // Fallback: use title only
-                    rawTranscript = `Contenido de TikTok: ${title}\n\nNo se pudo transcribir el audio automáticamente.`;
-                    enrichedContent = {
-                        type: 'other',
-                        summary: title,
-                        tags: [],
-                        enrichedData: null
-                    };
+                    
+                    // Special handling: if video is too long, use title/description
+                    if (transcribeError.message === 'AUDIO_TOO_LARGE') {
+                        console.log('📝 Using title/description for classification since video is long...');
+                        rawTranscript = `📱 TikTok (video largo - usando descripción):\n\n${title}`;
+                        
+                        // Try to classify using the title/description
+                        try {
+                            enrichedContent = await classifyAndEnrichContent(title, title);
+                            console.log('✅ Content classified successfully using title');
+                        } catch (enrichError) {
+                            console.warn('Classification from title failed:', enrichError.message);
+                            enrichedContent = {
+                                type: 'other',
+                                summary: title,
+                                tags: ['tiktok', 'video-largo'],
+                                enrichedData: null
+                            };
+                        }
+                    } else {
+                        // Other transcription errors: use fallback
+                        rawTranscript = `📱 TikTok: ${title}\n\n⚠️ La transcripción automática no está disponible.\nPosibles razones: el audio solo contiene música, habla poco clara, o audio muy corto.\n\nEl contenido multimedia está guardado y disponible.`;
+                        enrichedContent = {
+                            type: 'other',
+                            summary: title,
+                            tags: ['tiktok', 'sin-transcripción'],
+                            enrichedData: null
+                        };
+                    }
                 }
                 
                 // 6) Update DynamoDB: status = READY with all data
                 const updates = {
                     status: "READY",
                     type: enrichedContent.type,
-                    transcript: rawTranscript,
+                    title: title,  // Add title from TikTok
+                    transcriptFull: rawTranscript,  // Full transcript
+                    transcriptPreview: rawTranscript.substring(0, 200),  // Preview for list view
                     tags: enrichedContent.tags || []
                 };
                 

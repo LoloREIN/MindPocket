@@ -1,0 +1,12 @@
+{
+  "name": "mindpocket-infra-scripts",
+  "version": "1.0.0",
+  "description": "Scripts de utilidad para MindPocket",
+  "scripts": {
+    "seed": "node seed-database.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.645.0",
+    "@aws-sdk/lib-dynamodb": "^3.645.0"
+  }
+}

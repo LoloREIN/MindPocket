@@ -1,0 +1,11 @@
+{
+  "name": "weekly-summary",
+  "version": "1.0.0",
+  "description": "Weekly summary email Lambda",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.621.0",
+    "@aws-sdk/client-ses": "^3.621.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.621.0"
+  }
+}
