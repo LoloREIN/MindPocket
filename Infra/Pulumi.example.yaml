@@ -1,0 +1,40 @@
+# Ejemplo de configuración de Pulumi para MindPocket
+# Copia este archivo y configura tus propios valores
+
+config:
+  # AWS Region
+  aws:region: us-east-1
+  
+  # Amplify GitHub Access Token
+  # Obtén un token desde: https://github.com/settings/tokens
+  amplify:accessToken: ghp_tu_token_aqui
+  
+  # Google Cloud Credentials para Speech-to-Text
+  # Formato JSON escapado de las credenciales de tu Service Account
+  google-credentials-json:
+    type: service_account
+    project_id: tu-proyecto
+    private_key_id: tu-key-id
+    private_key: "-----BEGIN PRIVATE KEY-----\ntu-private-key\n-----END PRIVATE KEY-----\n"
+    client_email: tu-service-account@tu-proyecto.iam.gserviceaccount.com
+    client_id: "tu-client-id"
+    auth_uri: https://accounts.google.com/o/oauth2/auth
+    token_uri: https://oauth2.googleapis.com/token
+    auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+    client_x509_cert_url: https://www.googleapis.com/robot/v1/metadata/x509/tu-service-account%40tu-proyecto.iam.gserviceaccount.com
+  
+  # Telegram Bot Configuration
+  telegram:botToken: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+  telegram:defaultUserId: "tu_user_id_telegram"
+  
+  # AWS SES Email Configuration (NUEVO)
+  # Este email debe estar verificado en AWS SES
+  ses:fromEmail: "MindPocket <noreply@tu-dominio.com>"
+
+# Comandos útiles para configurar:
+# pulumi config set aws:region us-east-1
+# pulumi config set amplify:accessToken ghp_... --secret
+# pulumi config set google-credentials-json --secret < credentials.json
+# pulumi config set telegram:botToken "..." --secret
+# pulumi config set telegram:defaultUserId "..."
+# pulumi config set ses:fromEmail "MindPocket <email@ejemplo.com>"

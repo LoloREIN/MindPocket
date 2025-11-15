@@ -552,6 +552,8 @@ resources:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
           RAW_MEDIA_BUCKET: ${raw-media-bucket.id}
           TRANSCRIPTS_BUCKET: ${transcripts-bucket.id}
+          BEDROCK_MODEL_ID: amazon.titan-text-express-v1
+          BEDROCK_REGION: us-east-1
           GOOGLE_CREDENTIALS_JSON:
             fn::toJSON: ${google-credentials-json}
 
@@ -568,7 +570,7 @@ resources:
       environment:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
-          BEDROCK_MODEL_ID: anthropic.claude-3-sonnet-20240229-v1:0
+          BEDROCK_MODEL_ID: amazon.titan-text-express-v1
           BEDROCK_REGION: us-east-1
 
   get-items-lambda:
@@ -754,6 +756,7 @@ resources:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
           PROCESS_TIKTOK_QUEUE_URL: ${process-tiktok-queue.url}
           TELEGRAM_BOT_TOKEN: ${telegram:botToken}
+          DEFAULT_USER_ID: ${telegram:defaultUserId}
 
   # DeleteItem Lambda
   delete-item-lambda:
@@ -994,6 +997,220 @@ resources:
       function: ${telegram-webhook-lambda.name}
       principal: apigateway.amazonaws.com
       sourceArn: ${mindpocket-api.executionArn}/*/*
+
+  # IAM Role for Weekly Summary Lambda
+  weekly-summary-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Effect": "Allow"
+          }]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for Weekly Summary Lambda
+  weekly-summary-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${weekly-summary-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:Scan",
+                "dynamodb:Query"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ses:SendEmail",
+                "ses:SendRawEmail"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cognito-idp:ListUsers"
+              ],
+              "Resource": "${mindpocket-user-pool.arn}"
+            }
+          ]
+        }
+
+  # Weekly Summary Lambda
+  weekly-summary-lambda:
+    type: aws:lambda:Function
+    properties:
+      name: mindpocket-weekly-summary
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${weekly-summary-lambda-role.arn}
+      code:
+        fn::fileArchive: ./lambdas/weekly-summary
+      timeout: 300
+      memorySize: 512
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
+          FROM_EMAIL: ${ses:fromEmail}
+
+  # IAM Role for Daily Recommendations Lambda
+  daily-recommendations-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Effect": "Allow"
+          }]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for Daily Recommendations Lambda
+  daily-recommendations-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${daily-recommendations-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:Query"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ses:SendEmail",
+                "ses:SendRawEmail"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cognito-idp:ListUsers"
+              ],
+              "Resource": "${mindpocket-user-pool.arn}"
+            }
+          ]
+        }
+
+  # Daily Recommendations Lambda
+  daily-recommendations-lambda:
+    type: aws:lambda:Function
+    properties:
+      name: mindpocket-daily-recommendations
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${daily-recommendations-lambda-role.arn}
+      code:
+        fn::fileArchive: ./lambdas/daily-recommendations
+      timeout: 300
+      memorySize: 512
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
+          FROM_EMAIL: ${ses:fromEmail}
+
+  # EventBridge Scheduler Role
+  scheduler-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "scheduler.amazonaws.com"},
+            "Effect": "Allow"
+          }]
+        }
+
+  # EventBridge Scheduler Policy
+  scheduler-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${scheduler-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Action": "lambda:InvokeFunction",
+            "Resource": [
+              "${weekly-summary-lambda.arn}",
+              "${daily-recommendations-lambda.arn}"
+            ]
+          }]
+        }
+
+  # EventBridge Schedule for Weekly Summary (Mondays at 9 AM Mexico City time)
+  weekly-summary-schedule:
+    type: aws:scheduler:Schedule
+    properties:
+      name: mindpocket-weekly-summary
+      description: Send weekly summary emails every Monday at 9 AM
+      scheduleExpression: cron(0 15 ? * MON *)
+      scheduleExpressionTimezone: America/Mexico_City
+      flexibleTimeWindow:
+        mode: OFF
+      target:
+        arn: ${weekly-summary-lambda.arn}
+        roleArn: ${scheduler-role.arn}
+
+  # EventBridge Schedule for Daily Recommendations (Every day at 8 AM Mexico City time)
+  daily-recommendations-schedule:
+    type: aws:scheduler:Schedule
+    properties:
+      name: mindpocket-daily-recommendations
+      description: Send daily recommendations emails every day at 8 AM
+      scheduleExpression: cron(0 14 * * ? *)
+      scheduleExpressionTimezone: America/Mexico_City
+      flexibleTimeWindow:
+        mode: OFF
+      target:
+        arn: ${daily-recommendations-lambda.arn}
+        roleArn: ${scheduler-role.arn}
+
+  # Lambda Permissions for EventBridge Scheduler
+  weekly-summary-scheduler-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${weekly-summary-lambda.name}
+      principal: scheduler.amazonaws.com
+      sourceArn: ${weekly-summary-schedule.arn}
+
+  daily-recommendations-scheduler-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${daily-recommendations-lambda.name}
+      principal: scheduler.amazonaws.com
+      sourceArn: ${daily-recommendations-schedule.arn}
 
 outputs:
   # Amplify outputs
