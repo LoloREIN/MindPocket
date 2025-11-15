@@ -6,12 +6,16 @@ APP_DIR="$(pwd)"
 OUT_DIR="$APP_DIR/.amplify-hosting"
 COMPUTE_DIR="$OUT_DIR/compute/default"
 
+echo "🔍 DEBUG: Checking .next build output..."
+ls -la .next/ || echo "⚠️  .next directory not found"
+
 # Clean and prepare directories
 rm -rf "$OUT_DIR"
 mkdir -p "$COMPUTE_DIR"
 
 # 1) Copy Next.js standalone server into compute/default
 # This includes server.js and the minimal node_modules tree
+echo "📦 Copying standalone server..."
 cp -R .next/standalone/* "$COMPUTE_DIR"/
 
 # 2) Ensure Next can find static assets relative to the server
@@ -20,19 +24,27 @@ cp -R .next/static "$COMPUTE_DIR/.next/" 2>/dev/null || true
 
 # 2b) Expose required-server-files.json at the bundle root for Amplify
 if [ -f .next/required-server-files.json ]; then
+  echo "✓ Copying required-server-files.json"
   cp .next/required-server-files.json "$OUT_DIR/required-server-files.json"
+else
+  echo "⚠️  required-server-files.json not found"
 fi
 
 # 2c) Copy server trace files expected by Amplify into the bundle
 if [ -f .next/trace ]; then
-  # Root of bundle (some tooling checks here)
+  echo "✓ Copying trace files (trace)"
   cp .next/trace "$OUT_DIR/trace"
-  # Inside compute/default (where the server actually runs)
   cp .next/trace "$COMPUTE_DIR/trace"
+else
+  echo "⚠️  .next/trace not found"
 fi
+
 if [ -f .next/trace-build ]; then
+  echo "✓ Copying trace files (trace-build)"
   cp .next/trace-build "$OUT_DIR/trace-build"
   cp .next/trace-build "$COMPUTE_DIR/trace-build"
+else
+  echo "⚠️  .next/trace-build not found"
 fi
 
 # 3) Create minimal deploy-manifest.json with a catch-all route to compute
@@ -46,4 +58,8 @@ cat > "$OUT_DIR/deploy-manifest.json" << 'EOF'
 }
 EOF
 
+echo ""
+echo "📋 Final bundle structure:"
+ls -R "$OUT_DIR"
+echo ""
 echo "✅ .amplify-hosting bundle created at $OUT_DIR"
