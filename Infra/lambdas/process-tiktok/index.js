@@ -153,25 +153,56 @@ async function transcribeAudio(audioBuffer) {
     }
 }
 
-async function enhanceTranscriptWithBedrock(transcript, title) {
-    console.log('Enhancing transcript with Bedrock Claude...');
+async function classifyAndEnrichContent(transcript, title) {
+    console.log('Classifying and enriching content with Bedrock Claude...');
     
     try {
-        const prompt = `Tienes esta transcripción de un TikTok titulado "${title}":
+        const prompt = `Analiza esta transcripción de un TikTok titulado "${title}":
 
 ${transcript}
 
-Genera un resumen estructurado en español que incluya:
-1. Tema principal
-2. Puntos clave mencionados
-3. Consejos o pasos específicos
-4. Categoría (receta, rutina, consejo, etc.)
+Clasifica el contenido y extrae información estructurada. Responde SOLO con un JSON válido (sin markdown, sin explicaciones) con esta estructura:
 
-Mantén el resumen conciso, máximo 300 palabras.`;
+{
+  "type": "recipe" | "workout" | "pending" | "other",
+  "summary": "resumen breve del contenido",
+  "tags": ["tag1", "tag2", "tag3"],
+  "enrichedData": {
+    // Si es recipe:
+    "recipe": {
+      "name": "nombre del platillo",
+      "ingredients": [{"item": "ingrediente", "quantity": "cantidad"}],
+      "steps": ["paso 1", "paso 2"],
+      "time_minutes": 30,
+      "servings": 4,
+      "difficulty": "fácil"
+    },
+    // Si es workout:
+    "workout": {
+      "name": "nombre de la rutina",
+      "duration_minutes": 20,
+      "level": "principiante",
+      "focus": ["cardio", "fuerza"],
+      "blocks": [{"exercise": "ejercicio", "reps": "10-12", "sets": 3}]
+    },
+    // Si es pending (libro, película, curso):
+    "pending": {
+      "category": "movie" | "book" | "course" | "other",
+      "name": "nombre",
+      "author": "autor/director",
+      "description": "descripción"
+    }
+  }
+}
+
+IMPORTANTE: 
+- Responde SOLO el JSON, sin texto adicional
+- Si no es receta/workout/pending, usa type: "other" y omite enrichedData
+- Extrae solo la información que esté explícita en la transcripción`;
 
         const body = {
             anthropic_version: "bedrock-2023-05-31",
-            max_tokens: 400,
+            max_tokens: 1500,
             messages: [
                 {
                     role: "user",
@@ -189,15 +220,29 @@ Mantén el resumen conciso, máximo 300 palabras.`;
         const response = await bedrockClient.send(command);
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         
-        const enhancement = responseBody.content[0].text;
-        console.log('Transcript enhanced successfully');
+        const aiResponse = responseBody.content[0].text;
+        console.log('AI Response:', aiResponse.substring(0, 200) + '...');
         
-        return `${enhancement}\n\n--- Transcripción completa ---\n${transcript}`;
+        // Parse JSON response
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error('No JSON found in AI response');
+        }
+        
+        const enrichedData = JSON.parse(jsonMatch[0]);
+        console.log('Content classified as:', enrichedData.type);
+        
+        return enrichedData;
         
     } catch (error) {
-        console.error('Bedrock enhancement failed:', error);
-        // Return just the transcript if enhancement fails
-        return transcript;
+        console.error('Bedrock classification failed:', error);
+        // Return basic classification
+        return {
+            type: 'other',
+            summary: transcript.substring(0, 200),
+            tags: [],
+            enrichedData: null
+        };
     }
 }
 
@@ -271,36 +316,54 @@ exports.handler = async (event) => {
                 });
                 
                 // 4) Transcribe audio with Google Speech-to-Text
-                let transcript = null;
-                let transcriptionMethod = 'fallback';
+                let rawTranscript = null;
+                let enrichedContent = null;
                 
                 try {
                     console.log('Transcribing audio with Google Speech...');
-                    const rawTranscript = await transcribeAudio(audioBuffer);
+                    rawTranscript = await transcribeAudio(audioBuffer);
                     console.log('Audio transcribed successfully');
                     
-                    // 5) Enhance transcript with Bedrock Claude
+                    // 5) Classify and enrich content with Bedrock Claude
                     try {
-                        transcript = await enhanceTranscriptWithBedrock(rawTranscript, title);
-                        transcriptionMethod = 'google-speech + bedrock';
-                    } catch (enhanceError) {
-                        console.warn('Transcript enhancement failed:', enhanceError.message);
-                        transcript = rawTranscript;
-                        transcriptionMethod = 'google-speech';
+                        console.log('Classifying and enriching content...');
+                        enrichedContent = await classifyAndEnrichContent(rawTranscript, title);
+                        console.log('Content enriched successfully');
+                    } catch (enrichError) {
+                        console.warn('Content enrichment failed:', enrichError.message);
+                        enrichedContent = {
+                            type: 'other',
+                            summary: rawTranscript.substring(0, 200),
+                            tags: [],
+                            enrichedData: null
+                        };
                     }
                 } catch (transcribeError) {
                     console.warn('Audio transcription failed:', transcribeError.message);
                     // Fallback: use title only
-                    transcript = `Contenido de TikTok: ${title}\n\nNo se pudo transcribir el audio automáticamente.`;
-                    transcriptionMethod = 'fallback';
+                    rawTranscript = `Contenido de TikTok: ${title}\n\nNo se pudo transcribir el audio automáticamente.`;
+                    enrichedContent = {
+                        type: 'other',
+                        summary: title,
+                        tags: [],
+                        enrichedData: null
+                    };
                 }
                 
-                // 6) Update DynamoDB: status = COMPLETED with transcript
-                await updateItemStatus(userId, itemId, {
-                    status: "COMPLETED",
-                    transcript: transcript,
-                    transcriptionMethod: transcriptionMethod
-                });
+                // 6) Update DynamoDB: status = READY with all data
+                const updates = {
+                    status: "READY",
+                    type: enrichedContent.type,
+                    transcript: rawTranscript,
+                    tags: enrichedContent.tags || []
+                };
+                
+                // Add enrichedData if available
+                if (enrichedContent.enrichedData) {
+                    updates.enrichedData = enrichedContent.enrichedData;
+                }
+                
+                await updateItemStatus(userId, itemId, updates);
                 
                 console.log(`Successfully processed ${itemId}: COMPLETED`);
                 
