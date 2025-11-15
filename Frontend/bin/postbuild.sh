@@ -23,12 +23,16 @@ if [ -f .next/required-server-files.json ]; then
   cp .next/required-server-files.json "$OUT_DIR/required-server-files.json"
 fi
 
-# 2c) Copy server trace files expected by Amplify into the bundle root
+# 2c) Copy server trace files expected by Amplify into the bundle
 if [ -f .next/trace ]; then
+  # Root of bundle (some tooling checks here)
   cp .next/trace "$OUT_DIR/trace"
+  # Inside compute/default (where the server actually runs)
+  cp .next/trace "$COMPUTE_DIR/trace"
 fi
 if [ -f .next/trace-build ]; then
   cp .next/trace-build "$OUT_DIR/trace-build"
+  cp .next/trace-build "$COMPUTE_DIR/trace-build"
 fi
 
 # 3) Create minimal deploy-manifest.json with a catch-all route to compute
