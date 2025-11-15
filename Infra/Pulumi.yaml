@@ -81,10 +81,6 @@ resources:
             build:
               commands:
                 - npm run build
-          artifacts:
-            baseDirectory: Frontend
-            files:
-              - '**/*'
           cache:
             paths:
               - Frontend/node_modules/**/*
@@ -647,6 +643,49 @@ resources:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
 
+  # IAM Role for Telegram Webhook Lambda
+  telegram-webhook-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Effect": "Allow"
+          }]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for Telegram Webhook Lambda
+  telegram-webhook-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${telegram-webhook-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": "${process-tiktok-queue.arn}"
+            }
+          ]
+        }
+
   # IAM Role for DeleteItem Lambda
   delete-item-lambda-role:
     type: aws:iam:Role
@@ -689,6 +728,24 @@ resources:
             }
           ]
         }
+
+  # Telegram Webhook Lambda
+  telegram-webhook-lambda:
+    type: aws:lambda:Function
+    properties:
+      name: mindpocket-telegram-webhook
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${telegram-webhook-lambda-role.arn}
+      code:
+        fn::fileArchive: ./lambdas/telegram-webhook
+      timeout: 30
+      memorySize: 256
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          PROCESS_TIKTOK_QUEUE_URL: ${process-tiktok-queue.url}
+          TELEGRAM_BOT_TOKEN: ${telegram:botToken}
 
   # DeleteItem Lambda
   delete-item-lambda:
@@ -856,6 +913,23 @@ resources:
       integrationUri: ${delete-item-lambda.invokeArn}
       payloadFormatVersion: "2.0"
 
+  telegram-webhook-integration:
+    type: aws:apigatewayv2:Integration
+    properties:
+      apiId: ${mindpocket-api.id}
+      integrationType: AWS_PROXY
+      integrationUri: ${telegram-webhook-lambda.invokeArn}
+      payloadFormatVersion: "2.0"
+
+  # Telegram Webhook Route (no authentication required)
+  telegram-webhook-route:
+    type: aws:apigatewayv2:Route
+    properties:
+      apiId: ${mindpocket-api.id}
+      routeKey: "POST /telegram/webhook"
+      target: integrations/${telegram-webhook-integration.id}
+      authorizationType: NONE
+
   # API Gateway Stage
   api-stage:
     type: aws:apigatewayv2:Stage
@@ -905,6 +979,14 @@ resources:
       principal: apigateway.amazonaws.com
       sourceArn: ${mindpocket-api.executionArn}/*/*
 
+  telegram-webhook-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${telegram-webhook-lambda.name}
+      principal: apigateway.amazonaws.com
+      sourceArn: ${mindpocket-api.executionArn}/*/*
+
 outputs:
   # Amplify outputs
   appId: ${mindpocket-app.id}
@@ -932,6 +1014,9 @@ outputs:
   # SQS outputs
   processTikTokQueueUrl: ${process-tiktok-queue.url}
   processTikTokDlqUrl: ${process-tiktok-dlq.url}
+  
+  # Telegram Bot outputs
+  telegramWebhookUrl: ${mindpocket-api.apiEndpoint}/telegram/webhook
 
 config:
   pulumi:tags:
