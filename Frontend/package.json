@@ -1,5 +1,5 @@
 {
-  "name": "my-v0-project",
+  "name": "mindpocket",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,6 +9,10 @@
     "start": "next start"
   },
   "dependencies": {
+    "@aws-amplify/ui-react": "^6.3.1",
+    "@fortawesome/fontawesome-svg-core": "^7.1.0",
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -38,6 +42,7 @@
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
     "autoprefixer": "^10.4.20",
+    "aws-amplify": "^6.6.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
@@ -57,9 +62,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.0.0",
-    "zod": "3.25.76",
-    "aws-amplify": "^6.6.4",
-    "@aws-amplify/ui-react": "^6.3.1"
+    "zod": "3.25.76"
   },
   "pnpm": {
     "overrides": {

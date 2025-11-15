@@ -79,7 +79,7 @@ resources:
               phases:
                 preBuild:
                   commands:
-                    - npm install --legacy-peer-deps
+                    - npm ci --legacy-peer-deps --include=dev
                 build:
                   commands:
                     - npm run build
@@ -94,7 +94,6 @@ resources:
       environmentVariables:
         _LIVE_PACKAGE_UPDATES: '[{"pkg":"@aws-amplify/cli","type":"npm","version":"latest"}]'
         AMPLIFY_DIFF_DEPLOY: 'false'
-        AMPLIFY_MONOREPO_APP_ROOT: Frontend
         NODE_ENV: production
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
         NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID: ${mindpocket-user-pool-client.id}
