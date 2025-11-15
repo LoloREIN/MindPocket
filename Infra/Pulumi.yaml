@@ -70,31 +70,28 @@ resources:
       description: MindPocket wellness app
       repository: https://github.com/LoloREIN/MindPocket
       accessToken: ${amplify:accessToken}
-      platform: WEB_COMPUTE
       buildSpec: |
         version: 1
-        applications:
-          - appRoot: Frontend
-            frontend:
-              phases:
-                preBuild:
-                  commands:
-                    - echo "Installing dependencies"
-                    - npm install --legacy-peer-deps
-                build:
-                  commands:
-                    - echo "Building Next.js application"
-                    - npm run build
-              artifacts:
-                baseDirectory: .next
-                files:
-                  - '**/*'
-              cache:
-                paths:
-                  - node_modules/**/*
-                  - .next/cache/**/*
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - cd Frontend
+                - npm install --legacy-peer-deps --include=dev
+            build:
+              commands:
+                - npm run build
+          artifacts:
+            baseDirectory: Frontend
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - Frontend/node_modules/**/*
+              - Frontend/.next/cache/**/*
       environmentVariables:
         _LIVE_PACKAGE_UPDATES: '[{"pkg":"@aws-amplify/cli","type":"npm","version":"latest"}]'
+        AMPLIFY_DIFF_DEPLOY: 'false'
         NODE_ENV: production
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${mindpocket-user-pool.id}
         NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID: ${mindpocket-user-pool-client.id}
@@ -109,7 +106,8 @@ resources:
       appId: ${mindpocket-app.id}
       branchName: main
       enableAutoBuild: true
-      framework: Next.js
+      framework: Next.js - SSR
+      stage: PRODUCTION
 
   # Domain association (optional - commented out for now)
   # domain:
