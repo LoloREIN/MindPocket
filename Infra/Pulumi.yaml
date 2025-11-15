@@ -599,6 +599,118 @@ resources:
         variables:
           WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
 
+  # IAM Role for UpdateItem Lambda
+  update-item-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Effect": "Allow"
+          }]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for UpdateItem Lambda
+  update-item-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${update-item-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            }
+          ]
+        }
+
+  # UpdateItem Lambda
+  update-item-lambda:
+    type: aws:lambda:Function
+    properties:
+      name: mindpocket-update-item
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${update-item-lambda-role.arn}
+      code:
+        fn::fileArchive: ./lambdas/update-item
+      timeout: 30
+      memorySize: 256
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+
+  # IAM Role for DeleteItem Lambda
+  delete-item-lambda-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Effect": "Allow"
+          }]
+        }
+      managedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # IAM Policy for DeleteItem Lambda
+  delete-item-lambda-policy:
+    type: aws:iam:RolePolicy
+    properties:
+      role: ${delete-item-lambda-role.id}
+      policy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:DeleteItem"
+              ],
+              "Resource": "${wellness-items-table.arn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:DeleteObject"
+              ],
+              "Resource": "${raw-media-bucket.arn}/*"
+            }
+          ]
+        }
+
+  # DeleteItem Lambda
+  delete-item-lambda:
+    type: aws:lambda:Function
+    properties:
+      name: mindpocket-delete-item
+      runtime: nodejs20.x
+      handler: index.handler
+      role: ${delete-item-lambda-role.arn}
+      code:
+        fn::fileArchive: ./lambdas/delete-item
+      timeout: 30
+      memorySize: 256
+      environment:
+        variables:
+          WELLNESS_ITEMS_TABLE: ${wellness-items-table.name}
+          RAW_MEDIA_BUCKET: ${raw-media-bucket.id}
+
   # SQS Event Source Mapping for ProcessTikTok Lambda
   process-tiktok-event-source:
     type: aws:lambda:EventSourceMapping
@@ -712,6 +824,42 @@ resources:
       authorizationType: JWT
       authorizerId: ${cognito-authorizer.id}
 
+  # PUT /items/{id} - Update Item
+  update-item-route:
+    type: aws:apigatewayv2:Route
+    properties:
+      apiId: ${mindpocket-api.id}
+      routeKey: "PUT /items/{id}"
+      target: integrations/${update-item-integration.id}
+      authorizationType: JWT
+      authorizerId: ${cognito-authorizer.id}
+
+  update-item-integration:
+    type: aws:apigatewayv2:Integration
+    properties:
+      apiId: ${mindpocket-api.id}
+      integrationType: AWS_PROXY
+      integrationUri: ${update-item-lambda.invokeArn}
+      payloadFormatVersion: "2.0"
+
+  # DELETE /items/{id} - Delete Item
+  delete-item-route:
+    type: aws:apigatewayv2:Route
+    properties:
+      apiId: ${mindpocket-api.id}
+      routeKey: "DELETE /items/{id}"
+      target: integrations/${delete-item-integration.id}
+      authorizationType: JWT
+      authorizerId: ${cognito-authorizer.id}
+
+  delete-item-integration:
+    type: aws:apigatewayv2:Integration
+    properties:
+      apiId: ${mindpocket-api.id}
+      integrationType: AWS_PROXY
+      integrationUri: ${delete-item-lambda.invokeArn}
+      payloadFormatVersion: "2.0"
+
   # API Gateway Stage
   api-stage:
     type: aws:apigatewayv2:Stage
@@ -742,6 +890,22 @@ resources:
     properties:
       action: lambda:InvokeFunction
       function: ${get-item-lambda.name}
+      principal: apigateway.amazonaws.com
+      sourceArn: ${mindpocket-api.executionArn}/*/*
+
+  update-item-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${update-item-lambda.name}
+      principal: apigateway.amazonaws.com
+      sourceArn: ${mindpocket-api.executionArn}/*/*
+
+  delete-item-lambda-permission:
+    type: aws:lambda:Permission
+    properties:
+      action: lambda:InvokeFunction
+      function: ${delete-item-lambda.name}
       principal: apigateway.amazonaws.com
       sourceArn: ${mindpocket-api.executionArn}/*/*
 

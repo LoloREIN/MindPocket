@@ -7,13 +7,29 @@ import { MobileHeader } from '@/components/mobile-header'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, ArrowLeft, ExternalLink, Clock, Tag } from 'lucide-react'
+import { Loader2, ArrowLeft, ExternalLink, Clock, Tag, Edit, Trash2, Heart } from 'lucide-react'
 import { StatusBadge } from '@/components/status-badge'
-
-// Required for static export
-export function generateStaticParams() {
-  return []
-}
+import { Input } from '@/components/ui/input'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 export default function ItemDetailPage() {
   const params = useParams()
@@ -21,10 +37,28 @@ export default function ItemDetailPage() {
   const [item, setItem] = useState<WellnessItem | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  
+  // Edit dialog
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  
+  // Delete
+  const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Favorite
+  const [isFavorite, setIsFavorite] = useState(false)
 
   useEffect(() => {
     fetchItem()
   }, [params.id])
+
+  useEffect(() => {
+    if (item) {
+      setEditTitle(item.title || '')
+      setIsFavorite(item.isFavorite || false)
+    }
+  }, [item])
 
   const fetchItem = async () => {
     try {
@@ -37,6 +71,47 @@ export default function ItemDetailPage() {
       setError(err.message)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!item) return
+    try {
+      setIsSaving(true)
+      await apiClient.updateItem(item.itemId, { title: editTitle })
+      setItem({ ...item, title: editTitle })
+      setIsEditOpen(false)
+    } catch (err: any) {
+      console.error('Failed to update item:', err)
+      alert('Error al actualizar: ' + err.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleToggleFavorite = async () => {
+    if (!item) return
+    try {
+      const newFavorite = !isFavorite
+      await apiClient.updateItem(item.itemId, { isFavorite: newFavorite })
+      setIsFavorite(newFavorite)
+      setItem({ ...item, isFavorite: newFavorite })
+    } catch (err: any) {
+      console.error('Failed to toggle favorite:', err)
+      alert('Error al cambiar favorito: ' + err.message)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!item) return
+    try {
+      setIsDeleting(true)
+      await apiClient.deleteItem(item.itemId)
+      router.push('/library')
+    } catch (err: any) {
+      console.error('Failed to delete item:', err)
+      alert('Error al eliminar: ' + err.message)
+      setIsDeleting(false)
     }
   }
 
@@ -84,6 +159,75 @@ export default function ItemDetailPage() {
                   {item.type === 'UNKNOWN' ? 'Otro' : item.type}
                 </Badge>
               </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleToggleFavorite}
+                className="h-9 w-9"
+              >
+                <Heart 
+                  className={`h-5 w-5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`}
+                />
+              </Button>
+              
+              <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9">
+                    <Edit className="h-5 w-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Editar título</DialogTitle>
+                    <DialogDescription>
+                      Cambia el título del item
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Input
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Título del item"
+                  />
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleSaveEdit} disabled={isSaving}>
+                      {isSaving ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9">
+                    <Trash2 className="h-5 w-5 text-destructive" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar item?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta acción no se puede deshacer. El item se eliminará permanentemente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isDeleting ? 'Eliminando...' : 'Eliminar'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
 
