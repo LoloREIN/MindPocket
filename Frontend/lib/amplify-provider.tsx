@@ -12,11 +12,29 @@ export function AmplifyProvider({ children }: { children: React.ReactNode }) {
     if (!isConfigured && typeof window !== 'undefined') {
       console.log('🔧 Initializing Amplify Configuration...')
       
+      // Check if all required environment variables are present
+      const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID
+      const userPoolClientId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL
+      
+      console.log('📋 Environment Variables:', {
+        userPoolId: userPoolId ? '✅ Present' : '❌ Missing',
+        userPoolClientId: userPoolClientId ? '✅ Present' : '❌ Missing',
+        apiUrl: apiUrl ? '✅ Present' : '❌ Missing',
+      })
+      
+      if (!userPoolId || !userPoolClientId || !apiUrl) {
+        console.error('❌ Missing required environment variables!')
+        console.error('All env vars:', process.env)
+        setIsReady(true)
+        return
+      }
+      
       const config = {
         Auth: {
           Cognito: {
-            userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
-            userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID!,
+            userPoolId,
+            userPoolClientId,
             region: process.env.NEXT_PUBLIC_COGNITO_REGION || 'us-east-1',
             signUpVerificationMethod: 'code' as const,
             loginWith: {
@@ -28,7 +46,7 @@ export function AmplifyProvider({ children }: { children: React.ReactNode }) {
         API: {
           REST: {
             MindPocketAPI: {
-              endpoint: process.env.NEXT_PUBLIC_API_URL!,
+              endpoint: apiUrl,
               region: process.env.NEXT_PUBLIC_API_REGION || 'us-east-1',
             },
           },
@@ -42,9 +60,13 @@ export function AmplifyProvider({ children }: { children: React.ReactNode }) {
         apiEndpoint: config.API.REST.MindPocketAPI.endpoint,
       })
 
-      Amplify.configure(config, { ssr: true })
-      isConfigured = true
-      console.log('✅ Amplify configured successfully')
+      try {
+        Amplify.configure(config, { ssr: true })
+        isConfigured = true
+        console.log('✅ Amplify configured successfully')
+      } catch (error) {
+        console.error('❌ Error configuring Amplify:', error)
+      }
     }
     setIsReady(true)
   }, [])
